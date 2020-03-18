@@ -13,7 +13,7 @@ unsigned char *disk;
 struct dir{
     unsigned int block_no;
     unsigned int inode_no;
-   struct ext2_dir_entry *d;
+   struct ext2_dir_entry_2 *d;
    struct dir * next;
    struct ext2_inode *in;
 };
@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
     while(head != NULL){
       
        printf("   DIR BLOCK NUM: %d (for inode %d)\n", head->block_no, head->inode_no +1);
-       head->d = (struct ext2_dir_entry *)(disk + EXT2_BLOCK_SIZE * head->block_no);  
+       head->d = (struct ext2_dir_entry_2 *)(disk + EXT2_BLOCK_SIZE * head->block_no);  
 
         int i = 0;
            while (i < EXT2_BLOCK_SIZE) {
