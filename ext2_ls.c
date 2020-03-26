@@ -1,26 +1,43 @@
-#include <sys/mman.h>
 #include <stdlib.h>
-#include <string.h>
+#include <assert.h>
 #include <stdio.h>
-#include <fcntl.h>
+#include <errno.h>
 #include "ext2_welp.h"
-#include "ext2.h"
 
 char *usage = "USAGE: %s disk [-a] path\n";
-unsigned char *disk;
-int flag_a = 0;
-char *path;
 
-void ext2_ls() {
-	// Read super and group descriptor blocks
-	struct ext2_group_desc *blgrp = EXT2_GROUP_DESC(disk);
-	struct ext2_super_block *sb = EXT2_SUPER_BLOCK(disk);
-	struct ext2_dir_entry_2 entry = navigate(disk, path);
+int ext2_ls(unsigned char *disk, char *path, int flag_a) {
 
-	exit(0);
+	// Navigate to the directory of path
+	struct ext2_dir_entry_2 *entry = navigate(disk, path);
+	if (!entry) {
+		printf("No such file or directory\n");
+		return -ENOENT;
+	}
+
+	if (EXT2_IS_DIRECTORY(entry)) {
+		struct ext2_inode *inode = get_inode(disk, entry->inode);
+		int *blocks = inode_to_blocks(disk, inode);
+		int limit = EXT2_NUM_BLOCKS(disk, inode);
+		struct ext2_dir_entry_2 *block;
+		int i;
+
+		for (i = 0; i < limit; i++) {
+			block = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
+			printf("%s\n", block->name);
+		}
+
+	} else {
+		printf("%s\n", entry->name);
+	}
+
+	return 0;
 }
 
 int main(int argc, char *argv[]) {
+	unsigned char *disk;
+	int flag_a = 0;
+	char *path;
 
 	// If run without -a argument
 	if (argc == 3 && strcmp(argv[2], "-a") != 0) {
@@ -36,9 +53,13 @@ int main(int argc, char *argv[]) {
 	// Anything else
 	} else {
 		printf(usage, argv[0]);
-		exit(1);
+		return 1;
 	}
 
-	printf("%s %d\n", path, flag_a);
-	ext2_ls();
+	if (disk == MAP_FAILED) {
+        perror("mmap");
+        return 1;
+    }
+
+	return ext2_ls(disk, path, flag_a);
 }

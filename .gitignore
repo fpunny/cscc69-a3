@@ -1,1 +1,6 @@
 .backup
+ext2_cp
+ext2_ln
+ext2_ls
+ext2_mkdir
+ext2_rm
