@@ -1,13 +1,10 @@
-PROGS = cp ln ls mkdir rm
+PROGS = ext2_cp ext2_ln ext2_ls ext2_mkdir ext2_rm
 
 # Creates all ext2 commands
 all : $(PROGS)
 
-$(PROGS) : % : ext2_%.c ext2.h
-	gcc -Wall -g -c $<
-
-%.o : %.c ext2.h
-	gcc -Wall -g -c $<
+$(PROGS) : % : %.c ext2.h ext2_welp.h
+	gcc -Wall -g -o $@ $<
 
 # Create backup of images
 backup :
@@ -19,8 +16,8 @@ restore :
 
 # Clean up compiled stuff
 clean : 
-	rm -f *.o
+	rm -f $(PROGS)
 
 # Really cleanup repo
 purge :
-	rm -rf *.o .backup
+	rm -rf $(PROGS) .backup
