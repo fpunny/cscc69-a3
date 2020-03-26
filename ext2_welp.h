@@ -8,6 +8,7 @@
 
 // https://www.nongnu.org/ext2-doc/ext2.html#i-blocks
 #define EXT2_NUM_BLOCKS(disk, entry) (entry->i_blocks/(2 << (EXT2_SUPER_BLOCK(disk)->s_log_block_size)))
+#define EXT2_NEXT_FILE(entry) ((struct ext2_dir_entry_2 *)((char *)entry + entry->rec_len))
 #define EXT2_BLOCK(disk, x) (disk + (EXT2_BLOCK_SIZE * x))
 #define EXT2_DIRECT_BLOCKS 12
 
@@ -46,7 +47,6 @@ int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
     if (!entry->i_block) return NULL;
 
     unsigned int limit = EXT2_NUM_BLOCKS(disk, entry);
-    printf("%d\n", limit);
     int *blocks = malloc(limit * sizeof(int));
     assert(blocks);
 
@@ -70,17 +70,25 @@ int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
 /*
  * Get directory from entry that matches name
  */
-struct ext2_dir_entry_2 *get_block(unsigned char *disk, struct ext2_inode *entry, char *name) {
+struct ext2_dir_entry_2 *find_file(unsigned char *disk, struct ext2_inode *entry, char *name) {
     int *blocks = inode_to_blocks(disk, entry);
     int limit = EXT2_NUM_BLOCKS(disk, entry);
     struct ext2_dir_entry_2 *res = NULL;
     struct ext2_dir_entry_2 *block;
     unsigned int i = 0;
 
+    // Go through all blocks
     while (i < limit && !res) {
         block = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
-        if (strcmp(block->name, name) == 0) {
-            res = block;
+        unsigned int j = 0;
+
+        // Go through all files
+        while (j < EXT2_BLOCK_SIZE && !res) {
+            if (strcmp(block->name, name) == 0) {
+                res = block;
+            }
+            j += block->rec_len;
+            block = EXT2_NEXT_FILE(block);
         }
         i++;
     }
@@ -94,16 +102,16 @@ struct ext2_dir_entry_2 *get_block(unsigned char *disk, struct ext2_inode *entry
  */
 struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
     struct ext2_inode *inode = get_inode(disk, 2); // Root directory
-    struct ext2_dir_entry_2 *entry = get_block(disk, inode, ".");
+    struct ext2_dir_entry_2 *entry = find_file(disk, inode, ".");
     char *token = strtok(path, "/");
 
     while(token) {
-        entry = get_block(disk, inode, token);
+        entry = find_file(disk, inode, token);
         token = strtok(NULL, "/");
 
-        // If subdirectory is a file, return NULL
-        if (!EXT2_IS_DIRECTORY(entry) && token) {
-            return NULL;
+        // If subdirectory is a file, return NULL. Else return the last file
+        if (!EXT2_IS_DIRECTORY(entry)) {
+            return token ? NULL : entry;
         }
         inode = get_inode(disk, entry->inode);
     }
