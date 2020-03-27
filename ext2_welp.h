@@ -1,4 +1,5 @@
 #include <sys/mman.h>
+#include <assert.h>
 #include <string.h>
 #include <fcntl.h>
 #include "ext2.h"
@@ -40,7 +41,7 @@ struct ext2_inode *get_inode(unsigned char *disk, unsigned int number) {
 }
 
 /*
- * 
+ * Gets the blocks with corespond to the inode
  */
 int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
     // If no blocks, ignore
@@ -68,33 +69,45 @@ int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
 }
 
 /*
- * Get directory from entry that matches name
+ * Go over all blocks, passing them one by one into the callback. If callback return 0,
+ * then return block. else keep going. Your welcome...
  */
-struct ext2_dir_entry_2 *find_file(unsigned char *disk, struct ext2_inode *entry, char *name) {
+struct ext2_dir_entry_2 *iterate_inode(
+    unsigned char *disk,
+    struct ext2_inode *entry,
+    int (*callback)(struct ext2_dir_entry_2 *, void *),
+    void *params
+) {
     int *blocks = inode_to_blocks(disk, entry);
     int limit = EXT2_NUM_BLOCKS(disk, entry);
-    struct ext2_dir_entry_2 *res = NULL;
     struct ext2_dir_entry_2 *block;
-    unsigned int i = 0;
+    int i, j;
 
-    // Go through all blocks
-    while (i < limit && !res) {
+    // Loop through blocks
+    for (i = 0; i < limit; i++) {
         block = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
-        unsigned int j = 0;
 
-        // Go through all files
-        while (j < EXT2_BLOCK_SIZE && !res) {
-            if (strcmp(block->name, name) == 0) {
-                res = block;
+        // Loop through entries in block
+        for (j = 0; j < EXT2_BLOCK_SIZE; (j += block->rec_len, block = EXT2_NEXT_FILE(block))) {
+            if ((*callback)(block, params) == 0) {
+                free(blocks);
+                return block;
             }
-            j += block->rec_len;
-            block = EXT2_NEXT_FILE(block);
         }
-        i++;
     }
 
     free(blocks);
-    return res;
+    return NULL;
+}
+
+int _find_file(struct ext2_dir_entry_2 *block, void *name) {
+    return strcmp(block->name, (char *)name);
+}
+/*
+ * Get directory from entry that matches name
+ */
+struct ext2_dir_entry_2 *find_file(unsigned char *disk, struct ext2_inode *entry, char *name) {
+    return iterate_inode(disk, entry, _find_file, name);
 }
 
 /*
