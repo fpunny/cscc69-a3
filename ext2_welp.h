@@ -4,6 +4,10 @@
 #include <fcntl.h>
 #include "ext2.h"
 
+/* Helpful Notes
+    entry: ext2_dir_entry_2
+*/
+
 #define EXT2_GROUP_DESC(disk) ((struct ext2_group_desc *)(disk + (EXT2_BLOCK_SIZE * 2)))
 #define EXT2_SUPER_BLOCK(disk) ((struct ext2_super_block *)(disk + EXT2_BLOCK_SIZE))
 
