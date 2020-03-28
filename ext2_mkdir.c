@@ -28,6 +28,8 @@ struct ext2_dir_entry_2 {
 Might need to set this to parent Directory ACL
 unsigned int   i_dir_acl;     /* Directory ACL
 
+Notes:
+ext2 attempts to allocate each new directory in the group containing its parent directory
 */
 int main(int argc, char *argv[]) {
 	/* Check if path does not exist by calling Navigate, if null return ENOENT */
