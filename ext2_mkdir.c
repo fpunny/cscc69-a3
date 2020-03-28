@@ -21,7 +21,7 @@ struct ext2_dir_entry_2 {
 	unsigned short rec_len;   /* Directory entry length = EXT2 BLock
 	unsigned char  name_len;  /* Name length = argc length
 	unsigned char  file_type; = #define    EXT2_FT_DIR      2    /* Directory File
-	char           name[];    /* File name, up to EXT2_NAME_LEN = argc
+	char           name[];    /* File name, up to EXT2_NAME_LEN 255 = argc
 };
 
 */
