@@ -30,6 +30,10 @@ unsigned int   i_dir_acl;     /* Directory ACL
 
 Notes:
 ext2 attempts to allocate each new directory in the group containing its parent directory
+However, if the group is full, then the new file or new directory is placed in some other non-full group.
+
+The data blocks needed to store directories and files can be found by looking in the data allocation bitmap. 
+Any needed space in the inode table can be found by looking in the inode allocation bitmap.
 */
 int main(int argc, char *argv[]) {
 	/* Check if path does not exist by calling Navigate, if null return ENOENT */
