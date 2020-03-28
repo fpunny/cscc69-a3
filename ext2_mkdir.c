@@ -24,7 +24,10 @@ struct ext2_dir_entry_2 {
 	char           name[];    /* File name, up to EXT2_NAME_LEN 255 = argc
 };
  * Type field for file mode
-#define    EXT2_S_IFDIR  0x4000    /* directory */
+#define    EXT2_S_IFDIR  0x4000    /* directory
+Might need to set this to parent Directory ACL
+unsigned int   i_dir_acl;     /* Directory ACL
+
 */
 int main(int argc, char *argv[]) {
 	/* Check if path does not exist by calling Navigate, if null return ENOENT */
