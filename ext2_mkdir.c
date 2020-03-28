@@ -23,7 +23,8 @@ struct ext2_dir_entry_2 {
 	unsigned char  file_type; = #define    EXT2_FT_DIR      2    /* Directory File
 	char           name[];    /* File name, up to EXT2_NAME_LEN 255 = argc
 };
-
+ * Type field for file mode
+#define    EXT2_S_IFDIR  0x4000    /* directory */
 */
 int main(int argc, char *argv[]) {
 	/* Check if path does not exist by calling Navigate, if null return ENOENT */
