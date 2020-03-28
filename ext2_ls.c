@@ -17,8 +17,8 @@ int ext2_ls(unsigned char *disk, char *path, int flag_a) {
 	// Navigate to the directory of path
 	struct ext2_dir_entry_2 *entry = navigate(disk, path);
 	if (entry == NULL) {
-		printf("No such file or directory\n");
-		return -ENOENT;
+		printf(stderr, "No such file or directory\n");
+		return ENOENT;
 	}
 
 	// If directory, print it, else the file itself
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 	
 	// Anything else
 	} else {
-		printf(usage, argv[0]);
+		printf(stderr, usage, argv[0]);
 		return 1;
 	}
 

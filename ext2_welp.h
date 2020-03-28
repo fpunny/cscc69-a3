@@ -100,6 +100,48 @@ struct ext2_dir_entry_2 *iterate_inode(
     return NULL;
 }
 
+/*
+ * get the first free block
+ */
+unsigned char *get_free_block(unsigned char *disk) {
+    struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
+    unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_block_bitmap);
+    unsigned int i;
+
+    // Go through the bitmap
+    for (i = 0; i < EXT2_SUPER_BLOCK(disk)->s_blocks_count; i++) {
+        unsigned bit = bitmap[i/8];
+
+        // If it's free, then return the inode
+        if ((bit & (1 << i%8)) == 0) {
+            return EXT2_BLOCK(disk, i);
+        }
+    }
+
+    return NULL;
+}
+
+/*
+ * Get the first free inode
+ */
+struct ext2_inode *get_free_inode(unsigned char *disk) {
+    struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
+    unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_inode_bitmap);
+    unsigned int i;
+
+    // Go through the bitmap
+    for (i = 0; i < EXT2_SUPER_BLOCK(disk)->s_inodes_count; i++) {
+        unsigned bit = bitmap[i/8];
+
+        // If it's free, then return the inode
+        if ((bit & (1 << i%8)) == 0) {
+            return get_inode(disk, i);
+        }
+    }
+
+    return NULL;
+}
+
 int _find_file(struct ext2_dir_entry_2 *block, void *name) {
     return strcmp(block->name, (char *)name);
 }
