@@ -31,16 +31,24 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 		return ENOENT;
 	}
 
-	// Get free inode
-	struct ext2_inode *inode = get_free_inode(disk);
-	if (!inode) {
-		perror("inode");
-		return ENOENT;
-	}
-
 	// Open file
 	FILE *file = fopen(src, "r");
 	assert(file);
+
+	if (EXT2_IS_DIRECTORY(entry)) {
+		char *name = getName(src);
+		add_file(disk, entry, name);
+
+	} else if (EXT2_IS_FILE(entry)) {
+
+	}
+
+	// Get free inode
+	int inode_index = get_free_inode(disk);
+	if (inode_index == -1) {
+		perror("inode");
+		return ENOENT;
+	}
 
 	return 0;
 }
