@@ -6,9 +6,11 @@
 char *usage = "USAGE: %s disk [-a] path\n";
 
 int print(struct ext2_dir_entry_2 *block, void *flag_a) {
-	if (*(int *)flag_a || (strcmp(block->name, ".") != 0 && strcmp(block->name, "..") != 0)) {
-		printf("%s\n", block->name);
+	char *name = get_name(block);
+	if (*(int *)flag_a || (strcmp(name, ".") != 0 && strcmp(name, "..") != 0)) {
+		printf("%s\n", name);
 	}
+	free(name);
 	return 1;
 }
 
@@ -17,7 +19,7 @@ int ext2_ls(unsigned char *disk, char *path, int flag_a) {
 	// Navigate to the directory of path
 	struct ext2_dir_entry_2 *entry = navigate(disk, path);
 	if (entry == NULL) {
-		printf(stderr, "No such file or directory\n");
+		printf("No such file or directory\n");
 		return ENOENT;
 	}
 
@@ -26,7 +28,9 @@ int ext2_ls(unsigned char *disk, char *path, int flag_a) {
 		struct ext2_inode *inode = get_inode(disk, entry->inode);
 		iterate_inode(disk, inode, print, &flag_a);
 	} else {
-		printf("%s\n", entry->name);
+		char *name = get_name(entry);
+		printf("%s\n", name);
+		free(name);
 	}
 
 	return 0;
@@ -50,7 +54,7 @@ int main(int argc, char *argv[]) {
 	
 	// Anything else
 	} else {
-		printf(stderr, usage, argv[0]);
+		printf(usage, argv[0]);
 		return 1;
 	}
 
