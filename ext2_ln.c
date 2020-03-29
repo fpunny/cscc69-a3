@@ -46,10 +46,19 @@ Symbolic links can point to any type of file, even on nonexistent files.
 Symbolic links are very useful because they don't have the limitations associated to hard links. However, they use some disk space,
 allocated for their inode and their data blocks, and cause an overhead in the pathname to inode conversion because the kernel has to
 restart the name interpretation when it encounters a symbolic link.
+
+Keep in mind:
+when creating a new hard link for a file, the counter of hard links in
+the disk inode is incremented first, and the new name is added into the proper directory next.
 */
 int main(int argc, char *argv[]) {
+	/* Error Checking */
 	/* Check if source file does not exist, if true, return ENOENT */
 	/* Check if link name already exists, if true, return EEXIST */
 	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+	
+	/* Hard Links Instruction Flow (Order Matters) */
+	/* Increment the counter of hard links in the disk inode */
+	/* Add the new name to the proper directory */
 	exit(0);
 }
