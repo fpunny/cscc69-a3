@@ -121,8 +121,9 @@ int ext2_rm(unsigned char *disk, char *path) {
 	// saved_path variable is now set to the parent directory, so get parent block
 	struct ext2_dir_entry_2 *parent = navigate(disk, saved_path);
 	free(saved_path);
+	struct ext2_inode * parent_inode = get_inode(disk, parent->inode);
 	// Get previous block
-	struct ext2_dir_entry_2 *prev= iterate_inode(disk, get_inode(disk, parent->inode), is_prev_directory, &(entry->name));
+	struct ext2_dir_entry_2 *prev= iterate_inode(disk, parent_inode, is_prev_directory, &(entry->name));
 
 	if (prev == NULL) {
 		fprintf(stderr, "Error: Unable to find previous directory entry");
@@ -136,9 +137,46 @@ int ext2_rm(unsigned char *disk, char *path) {
 		status = delete_entry(disk, inode, entry);
 	}
 	// add to rec_len of previous dir entry so that deleted file gets skipped
-	prev->rec_len += entry->rec_len;
-	
-	
+	// do this in a loop to check when dir size ovetakes blocks size 
+	struct ext2_dir_entry_2 *iter_entry = NULL;
+	int limit = EXT2_NUM_BLOCKS(disk, parent_inode);
+	// re-use prev for iteration variable	
+	int *blocks = inode_to_blocks(disk, parent_inode);
+	int block_size = 0;
+	int finished = 0;
+	int i = 0;
+	// Loop through blocks
+	for (i=0; i < limit && (!finished); i ++) {
+		// re use prev variable as iterator
+		// Get first entry in directory
+		iter_entry = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
+		prev = NULL;
+		// Keep track of how close we are to hitting the block size
+		block_size = 0;
+		// Loop through each directory entry
+		while ((!finished) && block_size <= EXT2_BLOCK_SIZE) {
+			// Check when we reach the wanted entry
+			if (strcmp(entry->name, iter_entry->name)==0) {
+				// update rec_len of prev
+				if (prev != NULL) {
+					prev->rec_len += iter_entry->rec_len;
+				} else if (block_size + iter_entry->rec_len >= EXT2_BLOCK_SIZE) { // If the total size it great than the size of the block, clear the block ikn the parent node
+					parent_inode->i_block[i] = 0;	
+				} else { // Update value of next
+					struct ext2_dir_entry_2 *next = EXT2_NEXT_FILE(iter_entry);
+					next->rec_len -= iter_entry->rec_len;
+				}
+				finished = 1;
+			}
+			if (!finished) {
+				block_size += iter_entry->rec_len;
+				prev = iter_entry;
+				if (iter_entry->rec_len == 0) finished = 1;
+				iter_entry = EXT2_NEXT_FILE(iter_entry);
+			}
+		}
+	}
+	free(blocks);
 	return status;
 }
 
