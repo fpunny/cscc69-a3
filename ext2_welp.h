@@ -105,16 +105,56 @@ struct ext2_dir_entry_2 *iterate_inode(
 }
 
 /*
- * get the first free block
+ * Sets bit, and count, for bitmap of a thing
  */
-unsigned int get_free_block(unsigned char *disk) {
+int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, unsigned char *map, unsigned short *count) {
+    unsigned bit = map[index / 8] & (1 << index % 8);
+    if (state && !*count) {
+        perror("bitmap");
+        return 1;
+    }
+
+    if (bit != state) {
+        if (state) {
+            map[index / 8] |= (1 << index & 8);
+            (*count)--;
+        } else {
+            map[index / 8] &= ~(1 << index % 8);
+            (*count)++;
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * Sets bit, and count, for block bitmap
+ */
+int set_block_bitmap(unsigned char *disk, unsigned int index, unsigned state) {
     struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
     unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_block_bitmap);
-    unsigned int i;
+    unsigned short count = desc->bg_free_blocks_count;
+    return set_thing_bitmap(disk, index, state, bitmap, &count);
+}
 
+/*
+ * Sets bit, and count, for inode bitmap
+ */
+int set_inode_bitmap(unsigned char *disk, unsigned int index, unsigned state) {
+    struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
+    unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_inode_bitmap);
+    unsigned short count = desc->bg_free_inodes_count;
+    return set_thing_bitmap(disk, index, state, bitmap, &count);
+}
+
+/*
+ * Searches provided bitmap for first free space 
+ */
+int get_free_thing(unsigned char *disk, unsigned short limit, unsigned char *map) {
+    unsigned int i;
     // Go through the bitmap
-    for (i = 0; i < EXT2_SUPER_BLOCK(disk)->s_blocks_count; i++) {
-        unsigned bit = bitmap[i/8];
+    for (i = 0; i < limit; i++) {
+        unsigned bit = map[i/8];
 
         // If it's free, then return the inode
         if ((bit & (1 << i%8)) == 0) {
@@ -122,28 +162,25 @@ unsigned int get_free_block(unsigned char *disk) {
         }
     }
 
-    return NULL;
+    return -1;
+}
+
+/*
+ * get the first free block
+ */
+int get_free_block(unsigned char *disk) {
+    struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
+    unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_block_bitmap);
+    return get_free_thing(disk, EXT2_SUPER_BLOCK(disk)->s_blocks_count, bitmap);
 }
 
 /*
  * Get the first free inode
  */
-unsigned int get_free_inode(unsigned char *disk) {
+int get_free_inode(unsigned char *disk) {
     struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
     unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_inode_bitmap);
-    unsigned int i;
-
-    // Go through the bitmap
-    for (i = 0; i < EXT2_SUPER_BLOCK(disk)->s_inodes_count; i++) {
-        unsigned bit = bitmap[i/8];
-
-        // If it's free, then return the inode
-        if ((bit & (1 << i%8)) == 0) {
-            return i;
-        }
-    }
-
-    return NULL;
+    return get_free_thing(disk, EXT2_SUPER_BLOCK(disk)->s_inodes_count, bitmap);
 }
 
 int _find_file(struct ext2_dir_entry_2 *block, void *name) {

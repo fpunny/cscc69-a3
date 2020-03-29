@@ -32,8 +32,8 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 	}
 
 	// Get free inode
-	struct ext2_inode *inode = get_free_inode(disk);
-	if (!inode) {
+	int inode_index = get_free_inode(disk);
+	if (inode_index == -1) {
 		perror("inode");
 		return ENOENT;
 	}
