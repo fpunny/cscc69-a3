@@ -28,6 +28,27 @@ struct ext2_dir_entry_2 {
 Might need to set this to parent Directory ACL
 unsigned int   i_dir_acl;     /* Directory ACL
 
+struct ext2_inode {
+	unsigned short i_mode;        /* File mode  = 
+	unsigned short i_uid;         /* Low 16 bits of Owner Uid
+	unsigned int   i_size;        /* Size in bytes = 
+	unsigned int   i_atime;       /* Access time
+	unsigned int   i_ctime;       /* Creation time 
+	unsigned int   i_mtime;       /* Modification time 
+	unsigned int   i_dtime;       /* Deletion Time 
+	unsigned short i_gid;         /* Low 16 bits of Group Id 
+	unsigned short i_links_count; /* Links count = 
+	unsigned int   i_blocks;      /* Blocks count IN DISK SECTORS = 
+	unsigned int   i_flags;       /* File flags 
+	unsigned int   osd1;          /* OS dependent 1
+	unsigned int   i_block[15];   /* Pointers to blocks =
+	unsigned int   i_generation;  /* File version (for NFS) 
+	unsigned int   i_file_acl;    /* File ACL 
+	unsigned int   i_dir_acl;     /* Directory ACL 
+	unsigned int   i_faddr;       /* Fragment address 
+	unsigned int   extra[3];
+};
+
 Notes:
 ext2 attempts to allocate each new directory in the group containing its parent directory
 However, if the group is full, then the new file or new directory is placed in some other non-full group.
