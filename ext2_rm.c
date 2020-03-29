@@ -9,7 +9,17 @@
 
 char *usage = "USAGE: %s disk path\n";
 
-int ext2_rm(unsigned char *disk, char *path) {
+int is_prev_directory(struct ext2_dir_entry_2 *entry, void * name) {
+	char * file_name = (char *) name;
+	struct ext2_dir_entry_2 *next_block = EXT2_NEXT_FILE(entry);
+	if (strcmp(file_name, next_block->name) == 0) {
+		return 0;
+	}
+	return 1;
+}
+
+int delete_entry(unsigned char* disk, struct ext2_inode *inode, struct ext2_dir_entry_2 * entry) {
+
 	int i;
 	unsigned int num_blocks;
 	int *blocks;
@@ -17,25 +27,7 @@ int ext2_rm(unsigned char *disk, char *path) {
 	int bit_pos;
 	int byte;
 	int inode_num;
-	char* saved_path;
-	// navigate uses strtok which splits string, so save path before using it
-	saved_path = malloc(sizeof(char)* strlen(path));
-	strncpy(saved_path, path, strlen(path));
-	// Get the block from the given path
-	struct ext2_dir_entry_2 *entry = navigate(disk, path);
-	// Get parent directory to iterate through blocks and find
-	// prev and curr block
-	// Find last / in saved_path
-	char *first_slash = strrchr(saved_path,'/');
-	// Set the character at this point to '\0', thus terminating the string
-	*first_slash = '\0';
-	// saved_path variable is now set to the parent directory, so get parent block
-	printf("%s\n", saved_path);
-	struct ext2_dir_entry_2 *parent = navigate(disk, saved_path);
-	free(saved_path);
-	
-	// Get the inode from the block
-	struct ext2_inode *inode = get_inode(disk, entry->inode);
+	int status = 0;
 	// Get a list of blocks that are being used by this entry
 	blocks = inode_to_blocks(disk, inode);
 	// Get the number of blocks being used by this entry
@@ -57,7 +49,6 @@ int ext2_rm(unsigned char *disk, char *path) {
 		// 25 % 8 = 1. So we need to change the 1st bit from the left
 		// -1 because bits are 0 indexed
 		bit_pos = (blocks[i] % 8) - 1;
-		printf("bit pos %d\t", bit_pos);
 		// GEt the number representing the bits at this point in the bitmap
 		byte = block_bm[block_pos];
 		// Set bit to off
@@ -68,9 +59,10 @@ int ext2_rm(unsigned char *disk, char *path) {
 		blgrp->bg_free_blocks_count ++;
 		super->s_free_blocks_count ++;
 	}
+	
+		
 	// Set inode to free, same logic as blocks
 	inode_num = entry->inode;
-	printf("inode_num: %d ", inode_num);
 	unsigned char *inode_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_inode_bitmap);
 	block_pos = inode_num / 8;
 	bit_pos = (inode_num % 8) -1;
@@ -84,22 +76,73 @@ int ext2_rm(unsigned char *disk, char *path) {
 	entry->file_type = EXT2_FT_UNKNOWN;
 	// Set size to 0
 	inode->i_size = 0;
-	// Set links to 0
-	inode->i_links_count = 0;
 	// set delete time
 	time_t delete_time = time(NULL);
 	if (delete_time != (time_t)(-1)) {
 		inode-> i_dtime = (intmax_t)time;
 	} else {
-		fprintf(stderr, "Error: Failed to set delete time in inode %d\n", inode_num);	
+		fprintf(stderr, "Error: Failed to set delete time in inode %d\n", inode_num);
+		status = 1;
 	}
 	
 	// set entry's inode to 0
-	// entry->inode=0;
-	return 0;
-	// add to rec_len of previous dir entry so that deleted file gets skipped
-	
+	entry->inode=0;
+	return status;
+		
 }
+
+int ext2_rm(unsigned char *disk, char *path) {
+	
+	int status = 0;
+	char* saved_path;
+	// navigate uses strtok which splits string, so save path before using it
+	saved_path = malloc(sizeof(char)* strlen(path));
+	strncpy(saved_path, path, strlen(path));
+	// Get the block from the given path
+	struct ext2_dir_entry_2 *entry = navigate(disk, path);
+	if (entry == NULL) {
+		fprintf(stderr, "Invalid file or directory '%s'\n", saved_path);
+		free(saved_path);
+		return 1;
+	}
+	if (EXT2_IS_DIRECTORY(entry)) {
+		fprintf(stderr, "ext2_rm: cannot remove '%s': Is a directory\n", saved_path);
+		free(saved_path);
+		return 1;
+	}
+	// Get parent directory to iterate through blocks and find
+	// prev and curr block
+	// Find last / in saved_path
+	char *file_name = strrchr(saved_path,'/');
+	// Set the character at this point to '\0', thus terminating the string
+	*file_name = '\0';
+	// increment file name so it points to whatever was after the last /
+	file_name++;
+	// saved_path variable is now set to the parent directory, so get parent block
+	struct ext2_dir_entry_2 *parent = navigate(disk, saved_path);
+	free(saved_path);
+	// Get previous block
+	struct ext2_dir_entry_2 *prev= iterate_inode(disk, get_inode(disk, parent->inode), is_prev_directory, &(entry->name));
+
+	if (prev == NULL) {
+		fprintf(stderr, "Error: Unable to find previous directory entry");
+		return 1;
+	}
+	// Get the inode from the block
+	struct ext2_inode *inode = get_inode(disk, entry->inode);
+	// decrement if hardlink
+	inode->i_links_count --;
+	if (inode->i_links_count <= 0) { // No other link to this file, delete inode
+		status = delete_entry(disk, inode, entry);
+	}
+	// add to rec_len of previous dir entry so that deleted file gets skipped
+	prev->rec_len += entry->rec_len;
+	
+	
+	return status;
+}
+
+
 
 int main(int argc, char *argv[]) {
 	
