@@ -62,6 +62,8 @@ now when we do ls, we will see repText.txt as a newly created link file.
 Soft Link = ShortCuts (very small, Different Inode Number)
 Hard Link = Different Name of the Same File, Same File Size, SAME iNODE NUMBER (Like a copy of a file)
 */
+char *usage = "USAGE: %s disk [-s] target_path link_name\n";
+
 int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_soft_link) {
 	// The file we want to LINK TO
 	struct ext2_dir_entry_2 *source_entry = navigate(disk, source_path);
@@ -116,7 +118,7 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 	} else {
-		printf("Incorrect Number of Arguments Passed");
+		printf(usage, argv[0]);
 		return 1;
 	}
 	return ext2_ln(disk, source_path, target_path, is_soft_link);
