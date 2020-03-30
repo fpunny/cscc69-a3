@@ -57,8 +57,13 @@ int main(int argc, char *argv[]) {
 	/* Check if link name already exists, if true, return EEXIST */
 	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 	
-	/* Hard Links Instruction Flow (Order Matters) */
-	/* Increment the counter of hard links in the disk inode */
-	/* Add the new name to the proper directory */
+	/* Check if Soft / Symbolic Link */
+	if (strcmp(argv[2], "s") == 0) {
+		
+	} else {
+		/* Hard Links Instruction Flow (Order Matters) */
+		/* Increment the counter of hard links in the disk inode */
+		/* Add the new name to the proper directory */
+	}
 	exit(0);
 }
