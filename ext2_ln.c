@@ -103,14 +103,14 @@ int main(int argc, char *argv[]) {
 		
 		/* Check if Hard Link OR Soft / Symbolic Link ELSE Fail*/
 		if (argc == 3 && strcmp(argv[2], "s") != 0) {
-			source_path = read_image(argv[2]);
-			target_path = read_image(argv[3]);			
+			source_path = argv[2];
+			target_path = argv[3];			
 			/* Hard Links Instruction Flow (Order Matters) */
 			/* Increment the counter of hard links in the disk inode */
 			/* Add the new name to the proper directory */
 		} else if (argc == 4 && strcmp(argv[2], "s") == 0) {
-			source_path = read_image(argv[3]);
-			target_path = read_image(argv[4]);
+			source_path = argv[3];
+			target_path = argv[4];
 			is_soft_link = 0;
 		} else {
 			return 1;
