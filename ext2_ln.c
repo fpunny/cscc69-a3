@@ -116,6 +116,7 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 	} else {
+		printf("Incorrect Number of Arguments Passed");
 		return 1;
 	}
 	return ext2_ln(disk, source_path, target_path, is_soft_link);
