@@ -55,12 +55,21 @@ int main(int argc, char *argv[]) {
 	/* Error Checking */
 	/* Check if correct number of arguments passed */
 	if (argc == 3 || argc == 4) {
+		unsigned char *disk;
+		char *source_path;
+		char *target_path;
+		
+		disk = read_image(argv[1]);
+		source_path = read_image(argv[2]);
+		target_path = read_image(argv[3]);
 		/* Check if source file does not exist, if true, return ENOENT */
 		/* Check if link name already exists, if true, return EEXIST */
 		/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+
 	
+		
 		/* Check if Soft / Symbolic Link */
-		if (argc == 4 && strcmp(argv[3], "s") == 0) {
+		if (argc == 4 && strcmp(argv[4], "s") == 0) {
 		
 		} else {
 			/* Hard Links Instruction Flow (Order Matters) */
