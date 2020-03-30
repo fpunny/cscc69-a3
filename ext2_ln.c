@@ -53,17 +53,22 @@ the disk inode is incremented first, and the new name is added into the proper d
 */
 int main(int argc, char *argv[]) {
 	/* Error Checking */
-	/* Check if source file does not exist, if true, return ENOENT */
-	/* Check if link name already exists, if true, return EEXIST */
-	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+	/* Check if correct number of arguments passed */
+	if (argc == 3 || argc == 4) {
+		/* Check if source file does not exist, if true, return ENOENT */
+		/* Check if link name already exists, if true, return EEXIST */
+		/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 	
-	/* Check if Soft / Symbolic Link */
-	if (strcmp(argv[2], "s") == 0) {
+		/* Check if Soft / Symbolic Link */
+		if (argc == 4 && strcmp(argv[3], "s") == 0) {
 		
+		} else {
+			/* Hard Links Instruction Flow (Order Matters) */
+			/* Increment the counter of hard links in the disk inode */
+			/* Add the new name to the proper directory */
+		}
 	} else {
-		/* Hard Links Instruction Flow (Order Matters) */
-		/* Increment the counter of hard links in the disk inode */
-		/* Add the new name to the proper directory */
+		return 1;
 	}
 	exit(0);
 }
