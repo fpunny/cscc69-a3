@@ -58,11 +58,19 @@ The data blocks needed to store directories and files can be found by looking in
 Any needed space in the inode table can be found by looking in the inode allocation bitmap.
 */
 int main(int argc, char *argv[]) {
-	/* Error Checking (2 Edge Cases) */
-	/* Check if path does not exist by calling Navigate, if null return ENOENT */
-	/* Check if specified directory already exists by calling find_file, if true return EEXIST */
-	
-	/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
-	
-	exit(0);
+	if (argc == 2) {
+		
+		unsigned char *disk;
+		char *path;
+		disk = read_image(argv[1]);
+		path = argv[2];
+		/* Error Checking (2 Edge Cases) */
+		/* Check if path does not exist by calling Navigate, if null return ENOENT */
+		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
+		/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */	
+		return ;
+	} else {
+		return 1;
+	}
+	return 1;
 }
