@@ -1,6 +1,8 @@
 
 #include <stdlib.h>
 #include "ext2.h"
+#include "ext2_welp.h"
+
 /*
 ext2_ln: This program takes three command line arguments. 
 The first is the name of an ext2 formatted virtual disk. 
@@ -50,15 +52,74 @@ restart the name interpretation when it encounters a symbolic link.
 Keep in mind:
 when creating a new hard link for a file, the counter of hard links in
 the disk inode is incremented first, and the new name is added into the proper directory next.
+
+Example Case:
+echo "hello world" > ../superLongFileName.txt
+To make not have to call the superlongfilename everytime we do
+ln -s ../superLongFileName.txt repText.txt
+now when we do ls, we will see repText.txt as a newly created link file.
+
+Soft Link = ShortCuts (very small, Different Inode Number)
+Hard Link = Different Name of the Same File, Same File Size, SAME iNODE NUMBER (Like a copy of a file)
 */
-int main(int argc, char *argv[]) {
-	/* Error Checking */
-	/* Check if source file does not exist, if true, return ENOENT */
-	/* Check if link name already exists, if true, return EEXIST */
-	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+char *usage = "USAGE: %s disk [-s] target_path link_name\n";
+
+int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_soft_link) {
+	// The file we want to LINK TO
+	struct ext2_dir_entry_2 *source_entry = navigate(disk, source_path);
+	// The file we are going to CREATE which is a LINK
+	struct ext2_dir_entry_2 *target_entry = navigate(disk, target_path);
 	
-	/* Hard Links Instruction Flow (Order Matters) */
-	/* Increment the counter of hard links in the disk inode */
-	/* Add the new name to the proper directory */
-	exit(0);
+	/* Check if source file does not exist, if true, return ENOENT */
+	if (source_entry == NULL) {
+		printf("No such file\n");
+		return ENOENT;
+	}
+	/* Check if link name already exists, if true, return EEXIST */
+	if (find_file(get_name(target_entry)) == 0) {
+		return EEXIST;
+	}
+	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+	if (EXT2_IS_DIRECTORY(target_entry)) {
+		return EISDIR;
+	}
+	
+	if (is_soft_link) {
+	 return ;
+	} else {
+	 return ;
+	}
+}
+
+
+int main(int argc, char *argv[]) {
+	unsigned char *disk;
+	int is_soft_link = 1; // 1 = Not Soft Link
+	char *source_path;
+	char *target_path;
+	/* Error Checking */
+	/* Check if correct number of arguments passed */
+	if (argc == 3 || argc == 4) {
+		
+		disk = read_image(argv[1]);
+		
+		/* Check if Hard Link OR Soft / Symbolic Link ELSE Fail*/
+		if (argc == 3 && strcmp(argv[2], "s") != 0) {
+			source_path = argv[2];
+			target_path = argv[3];			
+			/* Hard Links Instruction Flow (Order Matters) */
+			/* Increment the counter of hard links in the disk inode */
+			/* Add the new name to the proper directory */
+		} else if (argc == 4 && strcmp(argv[2], "s") == 0) {
+			source_path = argv[3];
+			target_path = argv[4];
+			is_soft_link = 0;
+		} else {
+			return 1;
+		}
+	} else {
+		printf(usage, argv[0]);
+		return 1;
+	}
+	return ext2_ln(disk, source_path, target_path, is_soft_link);
 }
