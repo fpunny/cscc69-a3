@@ -89,7 +89,7 @@ int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
 /*
  * Sets bit, and count, for bitmap of a thing
  */
-int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, unsigned char *map, unsigned short *count) {
+int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, unsigned char *map, unsigned short *count, unsigned short *sb_count) {
     unsigned bit = map[index / 8] & (1 << index % 8);
     if (state && !*count) {
         perror("bitmap");
@@ -99,9 +99,11 @@ int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, un
     if (bit != state) {
         if (state) {
             SET_BIT_1(map, index);
+            (*sb_count)--;
             (*count)--;
         } else {
             SET_BIT_0(map, index);
+            (*sb_count)++;
             (*count)++;
         }
     }
@@ -114,9 +116,11 @@ int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, un
  */
 int set_block_bitmap(unsigned char *disk, unsigned int index, unsigned state) {
     struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
+    struct ext2_super_block *sb = EXT2_SUPER_BLOCK(disk);
     unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_block_bitmap);
+    unsigned short sb_count = sb->s_free_blocks_count;
     unsigned short count = desc->bg_free_blocks_count;
-    return set_thing_bitmap(disk, index, state, bitmap, &count);
+    return set_thing_bitmap(disk, index, state, bitmap, &count, &sb_count);
 }
 
 /*
@@ -124,9 +128,11 @@ int set_block_bitmap(unsigned char *disk, unsigned int index, unsigned state) {
  */
 int set_inode_bitmap(unsigned char *disk, unsigned int index, unsigned state) {
     struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
+    struct ext2_super_block *sb = EXT2_SUPER_BLOCK(disk);
     unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_inode_bitmap);
+    unsigned short sb_count = sb->s_free_inodes_count;
     unsigned short count = desc->bg_free_inodes_count;
-    return set_thing_bitmap(disk, index, state, bitmap, &count);
+    return set_thing_bitmap(disk, index, state, bitmap, &count, &sb_count);
 }
 
 /*
@@ -212,11 +218,52 @@ struct ext2_dir_entry_2 *find_file(unsigned char *disk, struct ext2_inode *entry
     return iterate_inode(disk, entry, _find_file, name);
 }
 
+/*
+ * Removes a file from disk, but not directory
+ */
+int remove_file(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
+    struct ext2_inode *file = get_inode(disk, inode);
+    int limit = EXT2_NUM_BLOCKS(disk, file);
+    int i;
+
+    // Free direct blocks
+    for (i = 0; i < EXT2_DIRECT_BLOCKS && i < limit; i++) {
+        set_block_bitmap(disk, file->i_block[i], 0);
+    }
+
+    // Free indirect block
+    if (limit >= EXT2_DIRECT_BLOCKS) {
+
+        // Free direct of indirect
+        set_block_bitmap(disk, file->i_block[EXT2_DIRECT_BLOCKS], 0);
+        int *block = (int *)EXT2_BLOCK(disk, file->i_block[EXT2_DIRECT_BLOCKS]);
+
+        // Free indirect of indirect
+        while(block) {
+            set_block_bitmap(disk, *block, 0);
+            block++;
+        }
+    }
+
+    EXT2_SET_BLOCKS(file, 0);
+
+    // Free inode
+    if (keep_inode) {
+        set_inode_bitmap(disk, inode, 0);
+    }
+
+    return 0;
+}
+
+
+
 int _last_file(struct ext2_dir_entry_2 *block, void *last) {
     *(struct ext2_dir_entry_2 **)last = block;
     return 1;
 }
-/* WIP */ 
+/*
+ * Adds a thing to the directory
+ */
 struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name, unsigned int type) {
     // Create new file entry struct
     unsigned int required = EXT2_DIR_SIZE(name);
