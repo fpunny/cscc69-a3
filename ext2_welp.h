@@ -25,7 +25,7 @@
 #define EXT2_NEXT_FILE(entry) ((struct ext2_dir_entry_2 *)((char *)entry + entry->rec_len))
 #define EXT2_BLOCK(disk, x) (disk + (EXT2_BLOCK_SIZE * x))
 #define EXT2_SET_BLOCKS(entry, x) (entry->i_blocks = (x) * (2 << (EXT2_SUPER_BLOCK(disk)->s_log_block_size)))
-#define SET_BIT_1(map, index) (map[index / 8] |= (1 << index & 8))
+#define SET_BIT_1(map, index) (map[index / 8] |= (1 << index % 8))
 #define SET_BIT_0(map, index) (map[index / 8] &= ~(1 << index % 8))
 
 // Type checks
