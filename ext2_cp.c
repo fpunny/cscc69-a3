@@ -9,10 +9,12 @@ char *usage = "USAGE: %s disk src dest\n";
 
 char *getName(char *path) {
 	char *token = strtok(path, "/");
-	while (token) {
-		char *_token = strtok(NULL, "/");
+	char *_token;
+
+	do {
+		_token = strtok(NULL, "/");
 		if (_token) token = _token;
-	}
+	} while (_token);
 	return token;
 }
 
@@ -37,17 +39,19 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 
 	if (EXT2_IS_DIRECTORY(entry)) {
 		char *name = getName(src);
-		add_file(disk, entry, name);
+		printf("%s\n", name);
+		entry = add_thing(disk, entry, name, EXT2_FT_REG_FILE);
+		struct ext2_inode *inode = (struct ext2_inode *)malloc(sizeof(struct ext2_inode));
+		printf("%d\n", entry->inode);
+		inode->i_mode = EXT2_S_IFREG;
+		inode->i_size = 0;
+		inode->i_links_count = 1;
+
+		memcpy(get_inode(disk, entry->inode), inode, sizeof(struct ext2_inode));
+		free(inode);
 
 	} else if (EXT2_IS_FILE(entry)) {
-
-	}
-
-	// Get free inode
-	int inode_index = get_free_inode(disk);
-	if (inode_index == -1) {
-		perror("inode");
-		return ENOENT;
+		// Clean entry
 	}
 
 	return 0;

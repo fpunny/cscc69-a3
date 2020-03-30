@@ -12,7 +12,7 @@
 #define EXT2_SUPER_BLOCK(disk) ((struct ext2_super_block *)(disk + EXT2_BLOCK_SIZE))
 
 // Helpful stuff
-#define MULTIPLE_OF_FOUR(x) (x + ((4 - (x%4)) % 4))
+#define MULTIPLE_OF_FOUR(x) ((x) + ((4 - ((x)%4)) % 4))
 #define MIN(x, y) (x > y ? y : x)
 #define MAX(x, y) (x < y ? y : x)
 
@@ -24,6 +24,7 @@
 #define EXT2_NUM_BLOCKS(disk, entry) (entry->i_blocks/(2 << (EXT2_SUPER_BLOCK(disk)->s_log_block_size)))
 #define EXT2_NEXT_FILE(entry) ((struct ext2_dir_entry_2 *)((char *)entry + entry->rec_len))
 #define EXT2_BLOCK(disk, x) (disk + (EXT2_BLOCK_SIZE * x))
+#define EXT2_SET_BLOCKS(entry, x) (entry->i_blocks = (x) * (2 << (EXT2_SUPER_BLOCK(disk)->s_log_block_size)))
 #define SET_BIT_1(map, index) (map[index / 8] |= (1 << index & 8))
 #define SET_BIT_0(map, index) (map[index / 8] &= ~(1 << index % 8))
 
@@ -92,7 +93,7 @@ int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, un
     unsigned bit = map[index / 8] & (1 << index % 8);
     if (state && !*count) {
         perror("bitmap");
-        return 1;
+        exit(1);
     }
 
     if (bit != state) {
@@ -131,10 +132,10 @@ int set_inode_bitmap(unsigned char *disk, unsigned int index, unsigned state) {
 /*
  * Searches provided bitmap for first free space 
  */
-int get_free_thing(unsigned char *disk, unsigned short limit, unsigned char *map) {
+int get_free_thing(unsigned char *disk, unsigned short limit, unsigned char *map, unsigned int start) {
     unsigned int i;
     // Go through the bitmap
-    for (i = 0; i < limit; i++) {
+    for (i = start; i < limit; i++) {
         unsigned bit = map[i/8];
 
         // If it's free, then return the inode
@@ -152,7 +153,8 @@ int get_free_thing(unsigned char *disk, unsigned short limit, unsigned char *map
 int get_free_block(unsigned char *disk) {
     struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
     unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_block_bitmap);
-    return get_free_thing(disk, EXT2_SUPER_BLOCK(disk)->s_blocks_count, bitmap);
+    unsigned int count = EXT2_SUPER_BLOCK(disk)->s_blocks_count;
+    return get_free_thing(disk, count, bitmap, 0);
 }
 
 /*
@@ -161,7 +163,8 @@ int get_free_block(unsigned char *disk) {
 int get_free_inode(unsigned char *disk) {
     struct ext2_group_desc *desc = EXT2_GROUP_DESC(disk);
     unsigned char *bitmap = EXT2_BLOCK(disk, desc->bg_inode_bitmap);
-    return get_free_thing(disk, EXT2_SUPER_BLOCK(disk)->s_inodes_count, bitmap);
+    unsigned int count = EXT2_SUPER_BLOCK(disk)->s_inodes_count;
+    return get_free_thing(disk, count, bitmap, EXT2_GOOD_OLD_FIRST_INO);
 }
 
 /*
@@ -214,26 +217,29 @@ int _last_file(struct ext2_dir_entry_2 *block, void *last) {
     return 1;
 }
 /* WIP */ 
-struct ext2_dir_entry_2 *add_file(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name) {
+struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name, unsigned int type) {
     // Create new file entry struct
     unsigned int required = EXT2_DIR_SIZE(name);
     struct ext2_dir_entry_2 *new_entry = (struct ext2_dir_entry_2 *)malloc(EXT2_DIR_SIZE(name));
 
     // Set the fields and bitmap
+    strncpy(new_entry->name, name, strlen(name));
     new_entry->inode = get_free_inode(disk);
-    new_entry->file_type = EXT2_FT_REG_FILE;
     new_entry->name_len = strlen(name);
+    new_entry->file_type = type;
     set_inode_bitmap(disk, new_entry->inode, 1);
 
     // Find last file in directory
     struct ext2_dir_entry_2 *last_entry = NULL;
     iterate_inode(disk, get_inode(disk, dir->inode), _last_file, &last_entry);
-    unsigned int actual = EXT2_DIR_SIZE(last_entry->name);
+    char *dir_name = get_name(last_entry);
+    unsigned int actual = EXT2_DIR_SIZE(dir_name);
+    free(dir_name);
 
     // We have space, add to block
     if (required <= EXT2_BLOCK_SIZE - actual) {
         new_entry->rec_len = last_entry->rec_len - actual;
-        memcpy(last_entry + actual, new_entry, new_entry->rec_len);
+        memcpy((char *)last_entry + actual, new_entry, required);
         last_entry->rec_len = actual;
 
         // Return new file
@@ -242,10 +248,52 @@ struct ext2_dir_entry_2 *add_file(unsigned char *disk, struct ext2_dir_entry_2 *
 
     // No space, new block
     } else {
+        new_entry->rec_len = EXT2_BLOCK_SIZE;
         struct ext2_inode *dir_inode = get_inode(disk, dir->inode);
-        int block_index = get_free_block(disk);
         int index = EXT2_NUM_BLOCKS(disk, dir_inode);
-        printf("%d %d\n", block_index, index);
+
+        // Setup new block with entry to put into directory
+        int block_index = get_free_block(disk);
+        unsigned char *block = EXT2_BLOCK(disk, block_index);
+        memcpy(block, new_entry, required);
+
+        // Add direct block
+        if (index < EXT2_DIRECT_BLOCKS) {
+            EXT2_SET_BLOCKS(dir_inode, index + 1);
+            dir_inode->i_block[index] = block_index;
+
+        // New indirect block
+        } else if (index == EXT2_DIRECT_BLOCKS) {
+            // Make indirect block
+            int indirect = get_free_block(disk);
+            set_block_bitmap(disk, indirect, 1);
+            unsigned char *indirect_block = EXT2_BLOCK(disk, indirect);
+            memset(indirect_block, '\0', EXT2_BLOCK_SIZE);
+
+            // Add indirect block and entry to directory
+            EXT2_SET_BLOCKS(dir_inode, EXT2_DIRECT_BLOCKS + 1);
+            dir_inode->i_block[index] = indirect;
+            indirect_block[0] = block_index;
+
+        // Add new block to indirect block
+        } else {
+            // Find free spot
+            unsigned char *indirect_block = EXT2_BLOCK(disk, dir_inode->i_block[EXT2_DIRECT_BLOCKS]);
+            int i = 0;
+            while(indirect_block[i] && i < EXT2_BLOCK_SIZE/sizeof(int)) {
+                i++;
+            }
+            if (i >= EXT2_BLOCK_SIZE) {
+                printf("No space in directory\n");
+                exit(1);
+            }
+
+            // Add new block to indirect
+            indirect_block[i] = block_index;
+        }
+
+        free(new_entry);
+        return (struct ext2_dir_entry_2 *)block;
     }
 
     free(new_entry);
@@ -256,7 +304,7 @@ struct ext2_dir_entry_2 *add_file(unsigned char *disk, struct ext2_dir_entry_2 *
  * Given an absolute path, navigate to the block entry
  */
 struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
-    struct ext2_inode *inode = get_inode(disk, 2); // Root directory
+    struct ext2_inode *inode = get_inode(disk, EXT2_ROOT_INO); // Root directory
     struct ext2_dir_entry_2 *entry = find_file(disk, inode, ".");
     char *token = strtok(path, "/");
 
