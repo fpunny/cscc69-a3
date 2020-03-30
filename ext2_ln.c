@@ -52,9 +52,20 @@ restart the name interpretation when it encounters a symbolic link.
 Keep in mind:
 when creating a new hard link for a file, the counter of hard links in
 the disk inode is incremented first, and the new name is added into the proper directory next.
+
+Example Case:
+echo "hello world" > ../superLongFileName.txt
+To make not have to call the superlongfilename everytime we do
+ln -s ../superLongFileName.txt repText.txt
+now when we do ls, we will see repText.txt as a newly created link file.
+
+Soft Link = ShortCuts (very small, Different Inode Number)
+Hard Link = Different Name of the Same File, Same File Size, SAME iNODE NUMBER (Like a copy of a file)
 */
 int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_soft_link) {
+	// The file we want to LINK TO
 	struct ext2_dir_entry_2 *source_entry = navigate(disk, source_path);
+	// The file we are going to CREATE which is a LINK
 	struct ext2_dir_entry_2 *target_entry = navigate(disk, target_path);
 	
 	/* Check if source file does not exist, if true, return ENOENT */
@@ -63,12 +74,19 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 		return ENOENT;
 	}
 	/* Check if link name already exists, if true, return EEXIST */
-	
+	if (find_file(get_name(target_entry)) == 0) {
+		return EEXIST;
+	}
 	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 	if (EXT2_IS_DIRECTORY(target_entry)) {
 		return EISDIR;
 	}
-
+	
+	if (is_soft_link) {
+	 return ;
+	} else {
+	 return ;
+	}
 }
 
 
