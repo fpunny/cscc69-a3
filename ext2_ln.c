@@ -1,6 +1,8 @@
 
 #include <stdlib.h>
 #include "ext2.h"
+#include "ext2_welp.h"
+
 /*
 ext2_ln: This program takes three command line arguments. 
 The first is the name of an ext2 formatted virtual disk. 
@@ -51,8 +53,14 @@ Keep in mind:
 when creating a new hard link for a file, the counter of hard links in
 the disk inode is incremented first, and the new name is added into the proper directory next.
 */
+int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_soft_link) {
+
+}
+
+
 int main(int argc, char *argv[]) {
 	unsigned char *disk;
+	int is_soft_link = 1; // 1 = Not Soft Link
 	char *source_path;
 	char *target_path;
 	/* Error Checking */
@@ -67,18 +75,19 @@ int main(int argc, char *argv[]) {
 		/* Check if Hard Link OR Soft / Symbolic Link ELSE Fail*/
 		if (argc == 3 && strcmp(argv[2], "s") != 0) {
 			source_path = read_image(argv[2]);
-			target_path = read_image(argv[3]);
+			target_path = read_image(argv[3]);			
 			/* Hard Links Instruction Flow (Order Matters) */
 			/* Increment the counter of hard links in the disk inode */
 			/* Add the new name to the proper directory */
 		} else if (argc == 4 && strcmp(argv[2], "s") == 0) {
 			source_path = read_image(argv[3]);
 			target_path = read_image(argv[4]);
+			is_soft_link = 0;
 		} else {
 			return 1;
 		}
 	} else {
 		return 1;
 	}
-	exit(0);
+	return ext2_ln(disk, source_path, target_path, is_soft_link);
 }
