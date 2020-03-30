@@ -17,11 +17,11 @@ Again, please read the specifications to make sure you're implementing everythin
 Helpful:
 We need this for init
 struct ext2_dir_entry_2 {
-	unsigned int   inode;     /* Inode number = use get_inode function
+	unsigned int   inode;     /* Inode number = use get_inode function (4 Byte Alingment, 0, 12, 24, 40, 52, 68)
 	unsigned short rec_len;   /* Directory entry length = EXT2 BLock
 	unsigned char  name_len;  /* Name length = argc length
 	unsigned char  file_type; = #define    EXT2_FT_DIR      2    /* Directory File
-	char           name[];    /* File name, up to EXT2_NAME_LEN 255 = argc
+	char           name[];    /* File name, up to EXT2_NAME_LEN 255 = argc (No \0 for the names!)
 };
  * Type field for file mode
 #define    EXT2_S_IFDIR  0x4000    /* directory
@@ -57,8 +57,11 @@ The data blocks needed to store directories and files can be found by looking in
 Any needed space in the inode table can be found by looking in the inode allocation bitmap.
 */
 int main(int argc, char *argv[]) {
+	/* Error Checking (2 Edge Cases) */
 	/* Check if path does not exist by calling Navigate, if null return ENOENT */
 	/* Check if specified directory already exists by calling find_file, if true return EEXIST */
+	
 	/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
+	
 	exit(0);
 }
