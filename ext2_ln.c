@@ -54,6 +54,20 @@ when creating a new hard link for a file, the counter of hard links in
 the disk inode is incremented first, and the new name is added into the proper directory next.
 */
 int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_soft_link) {
+	struct ext2_dir_entry_2 *source_entry = navigate(disk, source_path);
+	struct ext2_dir_entry_2 *target_entry = navigate(disk, target_path);
+	
+	/* Check if source file does not exist, if true, return ENOENT */
+	if (source_entry == NULL) {
+		printf("No such file\n");
+		return ENOENT;
+	}
+	/* Check if link name already exists, if true, return EEXIST */
+	
+	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+	if (EXT2_IS_DIRECTORY(target_entry)) {
+		return EISDIR;
+	}
 
 }
 
@@ -68,9 +82,6 @@ int main(int argc, char *argv[]) {
 	if (argc == 3 || argc == 4) {
 		
 		disk = read_image(argv[1]);
-		/* Check if source file does not exist, if true, return ENOENT */
-		/* Check if link name already exists, if true, return EEXIST */
-		/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 		
 		/* Check if Hard Link OR Soft / Symbolic Link ELSE Fail*/
 		if (argc == 3 && strcmp(argv[2], "s") != 0) {
