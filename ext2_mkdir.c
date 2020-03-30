@@ -18,7 +18,8 @@ Helpful:
 We need this for init
 struct ext2_dir_entry_2 {
 	unsigned int   inode;     /* Inode number = use get_inode function (4 Byte Alingment, 0, 12, 24, 40, 52, 68)
-	unsigned short rec_len;   /* Directory entry length = EXT2 BLock
+	unsigned short rec_len;   /* Directory entry length = Record Length (Meaning space until next inode)
+		If prev dir starts at 0 and next dir starts at 12, then rec len for prev dir is 12.
 	unsigned char  name_len;  /* Name length = argc length
 	unsigned char  file_type; = #define    EXT2_FT_DIR      2    /* Directory File
 	char           name[];    /* File name, up to EXT2_NAME_LEN 255 = argc (No \0 for the names!)
