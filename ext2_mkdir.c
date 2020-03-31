@@ -72,11 +72,11 @@ int main(int argc, char *argv[]) {
 		}
 		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
 		char *dir_name = get_name(entry)
-		if (find_file(dir_name) == 0) {
+		if (find_file(entry, dir_name) == 0) {
 			printf("A subdirectory or file %s already exists.", dir_name);
 			return EEXIST;
 		}
-		
+		free(dir_name);
 		/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
 		
 		return 0;
