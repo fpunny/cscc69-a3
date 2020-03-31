@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
 		disk = read_image(argv[1]);
 		path = argv[2];
 		struct ext2_dir_entry_2 *entry = navigate(disk, path);
-		
+		struct ext2_inode *entryNode = get_inode(entry->inode);
 		/* Error Checking (2 Edge Cases) */
 		/* Check if path does not exist by calling Navigate, if null return ENOENT */
 		if (entry == NULL) {
@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
 		}
 		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
 		char *dir_name = get_name(entry)
-		if (find_file(entry, dir_name) == 0) {
+		if (find_file(entryNode, dir_name) == 0) {
 			printf("A subdirectory or file %s already exists.", dir_name);
 			return EEXIST;
 		}
