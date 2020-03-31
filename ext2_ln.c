@@ -81,16 +81,20 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 	if (check_unique_name) {
 		return EEXIST;
 	}
-	free(target_name);
+	
 	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 	if (EXT2_IS_DIRECTORY(target_entry)) {
 		return EISDIR;
 	}
 	
 	if (is_soft_link) {
-	 return ;
+		
+		free(target_name);
+		return ;
 	} else {
-	 return ;
+		
+		free(target_name);
+		return ;
 	}
 }
 
