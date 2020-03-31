@@ -77,7 +77,8 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 	}
 	/* Check if link name already exists, if true, return EEXIST */
 	char* target_name = get_name(target_entry);
-	if (find_file(, target_name) == 0) {
+	struct ext2_dir_entry_2 *check_unique_name = find_file(disk, get_inode(disk, target_entry->inode), target_name)
+	if (check_unique_name) {
 		return EEXIST;
 	}
 	free(target_name);
@@ -104,6 +105,7 @@ int main(int argc, char *argv[]) {
 	if (argc == 3 || argc == 4) {
 		
 		disk = read_image(argv[1]);
+		
 		
 		/* Check if Hard Link OR Soft / Symbolic Link ELSE Fail*/
 		if (argc == 3 && strcmp(argv[2], "s") != 0) {
