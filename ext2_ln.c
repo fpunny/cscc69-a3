@@ -76,9 +76,11 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 		return ENOENT;
 	}
 	/* Check if link name already exists, if true, return EEXIST */
-	if (find_file(get_name(target_entry)) == 0) {
+	char* target_name = get_name(target_entry);
+	if (find_file(, target_name) == 0) {
 		return EEXIST;
 	}
+	free(target_name);
 	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 	if (EXT2_IS_DIRECTORY(target_entry)) {
 		return EISDIR;
