@@ -76,18 +76,25 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 		return ENOENT;
 	}
 	/* Check if link name already exists, if true, return EEXIST */
-	if (find_file(get_name(target_entry)) == 0) {
+	char* target_name = get_name(target_entry);
+	struct ext2_dir_entry_2 *check_unique_name = find_file(disk, get_inode(disk, target_entry->inode), target_name)
+	if (check_unique_name) {
 		return EEXIST;
 	}
+	
 	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
 	if (EXT2_IS_DIRECTORY(target_entry)) {
 		return EISDIR;
 	}
 	
 	if (is_soft_link) {
-	 return ;
+		
+		free(target_name);
+		return ;
 	} else {
-	 return ;
+		
+		free(target_name);
+		return ;
 	}
 }
 
@@ -102,6 +109,7 @@ int main(int argc, char *argv[]) {
 	if (argc == 3 || argc == 4) {
 		
 		disk = read_image(argv[1]);
+		
 		
 		/* Check if Hard Link OR Soft / Symbolic Link ELSE Fail*/
 		if (argc == 3 && strcmp(argv[2], "s") != 0) {

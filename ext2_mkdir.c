@@ -64,19 +64,19 @@ int main(int argc, char *argv[]) {
 		disk = read_image(argv[1]);
 		path = argv[2];
 		struct ext2_dir_entry_2 *entry = navigate(disk, path);
-		
+		struct ext2_inode *entryNode = get_inode(entry->inode);
 		/* Error Checking (2 Edge Cases) */
 		/* Check if path does not exist by calling Navigate, if null return ENOENT */
 		if (entry == NULL) {
 			return ENOENT;
 		}
 		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
-		char *dir_name = get_name(entry)
-		if (find_file(dir_name) == 0) {
+		char *dir_name = get_name(disk, entry);
+		if (find_file(disk, entryNode, dir_name) == 0) {
 			printf("A subdirectory or file %s already exists.", dir_name);
 			return EEXIST;
 		}
-		
+		free(dir_name);
 		/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
 		
 		return 0;
