@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
 			return ENOENT;
 		}
 		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
-		char *dir_name = get_name(entry)
+		char *dir_name = get_name(disk, entry)
 		if (find_file(disk, entryNode, dir_name) == 0) {
 			printf("A subdirectory or file %s already exists.", dir_name);
 			return EEXIST;
