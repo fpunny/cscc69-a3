@@ -88,11 +88,11 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 	}
 	
 	if (is_soft_link) {
-		
+		struct ext2_dir_entry_2 *new_soft_link = add_thing(disk, source_entry, target_entry, EXT2_FT_SYMLINK);
 		free(target_name);
 		return ;
 	} else {
-		
+		struct ext2_dir_entry_2 *new_hard_link = add_thing(disk, source_entry, target_entry, EXT2_FT_REG_FILE);
 		free(target_name);
 		return ;
 	}
