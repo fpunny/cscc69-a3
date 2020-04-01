@@ -1,7 +1,7 @@
 
 #include <stdlib.h>
 #include "ext2.h"
-
+#include "ext2_welp.h"
 /*
 ext2_mkdir: This program takes two command line arguments. 
 The first is the name of an ext2 formatted virtual disk. 
@@ -58,11 +58,15 @@ The data blocks needed to store directories and files can be found by looking in
 Any needed space in the inode table can be found by looking in the inode allocation bitmap.
 */
 int main(int argc, char *argv[]) {
-	if (argc == 2) {
+	if (argc == 3) {
 		unsigned char *disk;
 		char *path;
 		disk = read_image(argv[1]);
 		path = argv[2];
+		if (strcmp("/", path) == 0) {
+			printf("Cannot recreate root directory\n");
+			return EEXIST;
+		}
 		struct ext2_dir_entry_2 *entry = navigate(disk, path);
 		struct ext2_inode *entryNode = get_inode(entry->inode);
 		/* Error Checking (2 Edge Cases) */
@@ -70,15 +74,20 @@ int main(int argc, char *argv[]) {
 		if (entry == NULL) {
 			return ENOENT;
 		}
-		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
-		char *dir_name = get_name(disk, entry);
-		if (find_file(disk, entryNode, dir_name) == 0) {
+		/* Check if directory name already exists, if true, return EEXIST */
+		char* dir_name = get_name(entry);
+		struct ext2_dir_entry_2 *check_unique_name = find_file(disk, entryNode, dir_name)
+		if (check_unique_name) {
 			printf("A subdirectory or file %s already exists.", dir_name);
 			return EEXIST;
 		}
 		free(dir_name);
-		/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
-		
+		/* Create new Dir with given name */
+		struct ext2_dir_entry_2 *new_dir_entry = add_thing(disk, entry, dir_name, EXT2_FT_DIR);
+		/* Add the . Shortcut */
+		struct ext2_dir_entry_2 *curr_dir_link = add_thing(disk, new_dir_entry, ".", EXT2_FT_SYMLINK)
+		/* Add the .. Shortcut */
+		struct ext2_dir_entry_2 *parent_dir_link = add_thing(disk, new_dir_entry, "..", EXT2_FT_SYMLINK)
 		return 0;
 	} else {
 		return 1;

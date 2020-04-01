@@ -88,11 +88,13 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 	}
 	
 	if (is_soft_link) {
-		
+		struct ext2_dir_entry_2 *new_soft_link = add_thing(disk, source_entry, target_name, EXT2_FT_SYMLINK);
 		free(target_name);
 		return ;
 	} else {
-		
+		struct ext2_dir_entry_2 *new_hard_link = add_thing(disk, source_entry, target_name, EXT2_FT_REG_FILE);
+		/* Hard Links have the same Inode # as the File being linked to */
+		new_hard_link->inode = source_entry->inode;
 		free(target_name);
 		return ;
 	}
@@ -106,7 +108,7 @@ int main(int argc, char *argv[]) {
 	char *target_path;
 	/* Error Checking */
 	/* Check if correct number of arguments passed */
-	if (argc == 3 || argc == 4) {
+	if (argc == 4 || argc == 5){
 		
 		disk = read_image(argv[1]);
 		
@@ -118,10 +120,12 @@ int main(int argc, char *argv[]) {
 			/* Hard Links Instruction Flow (Order Matters) */
 			/* Increment the counter of hard links in the disk inode */
 			/* Add the new name to the proper directory */
+			ext2_ln(disk, source_path, target_path, is_soft_link);
 		} else if (argc == 4 && strcmp(argv[2], "s") == 0) {
 			source_path = argv[3];
 			target_path = argv[4];
-			is_soft_link = 0;
+			is_soft_link = 0; // Soft Link = True
+			ext2_ln(disk, source_path, target_path, is_soft_link);
 		} else {
 			return 1;
 		}
