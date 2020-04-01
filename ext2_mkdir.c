@@ -58,11 +58,15 @@ The data blocks needed to store directories and files can be found by looking in
 Any needed space in the inode table can be found by looking in the inode allocation bitmap.
 */
 int main(int argc, char *argv[]) {
-	if (argc == 2) {
+	if (argc == 3) {
 		unsigned char *disk;
 		char *path;
 		disk = read_image(argv[1]);
 		path = argv[2];
+		if (strcmp("/", path) == 0) {
+			printf("Cannot recreate root directory\n");
+			return EEXIST;
+		}
 		struct ext2_dir_entry_2 *entry = navigate(disk, path);
 		struct ext2_inode *entryNode = get_inode(entry->inode);
 		/* Error Checking (2 Edge Cases) */
