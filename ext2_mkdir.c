@@ -1,7 +1,7 @@
 
 #include <stdlib.h>
 #include "ext2.h"
-
+#include "ext2_welp.h"
 /*
 ext2_mkdir: This program takes two command line arguments. 
 The first is the name of an ext2 formatted virtual disk. 
@@ -70,15 +70,16 @@ int main(int argc, char *argv[]) {
 		if (entry == NULL) {
 			return ENOENT;
 		}
-		/* Check if specified directory already exists by calling find_file, if true return EEXIST */
-		char *dir_name = get_name(disk, entry);
-		if (find_file(disk, entryNode, dir_name) == 0) {
+		/* Check if directory name already exists, if true, return EEXIST */
+		char* dir_name = get_name(entry);
+		struct ext2_dir_entry_2 *check_unique_name = find_file(disk, entryNode, dir_name)
+		if (check_unique_name) {
 			printf("A subdirectory or file %s already exists.", dir_name);
 			return EEXIST;
 		}
 		free(dir_name);
 		/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
-		
+		add_thing(disk, entry, dir_name, EXT2_FT_DIR);
 		return 0;
 	} else {
 		return 1;
