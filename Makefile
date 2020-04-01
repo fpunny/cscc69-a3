@@ -1,4 +1,4 @@
-PROGS = ext2_cp ext2_ln ext2_ls ext2_mkdir ext2_rm
+PROGS = ext2_cp ext2_ln ext2_ls ext2_mkdir ext2_rm ext2_rm_bonus
 
 # Creates all ext2 commands
 all : $(PROGS)

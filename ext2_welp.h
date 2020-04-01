@@ -2,6 +2,9 @@
 #include <assert.h>
 #include <string.h>
 #include <fcntl.h>
+#include <time.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include "ext2.h"
 
 /* Helpful Notes
@@ -258,19 +261,227 @@ struct ext2_dir_entry_2 *add_file(unsigned char *disk, struct ext2_dir_entry_2 *
 struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
     struct ext2_inode *inode = get_inode(disk, 2); // Root directory
     struct ext2_dir_entry_2 *entry = find_file(disk, inode, ".");
+    
     char *token = strtok(path, "/");
-
     while(token) {
         entry = find_file(disk, inode, token);
         token = strtok(NULL, "/");
-
         // If subdirectory is a file, return NULL. Else return the last file
         if (!EXT2_IS_DIRECTORY(entry)) {
             return token ? NULL : entry;
         }
         inode = get_inode(disk, entry->inode);
     }
-
+    
     // Return the file/directory
     return entry;
 }
+
+/*
+ *
+ */
+struct ext2_dir_entry_2 *get_parent(unsigned char *disk, char *path) {
+	// Get parent directory to iterate through blocks and find
+	char* saved_path = malloc(sizeof(char)* strlen(path));
+        strncpy(saved_path, path, strlen(path));
+	struct ext2_dir_entry_2 *entry = NULL;
+	
+	// Find last / in saved_path
+	char *file_name = strrchr(saved_path,'/');
+	if (file_name == NULL) {// in root directory
+		entry = navigate(disk, "/"); // get root entry
+	} else {
+		// Set the character at this point to '\0', thus terminating the string
+		*file_name = '\0';
+		// saved_path variable is now set to the parent directory, so get parent block
+		entry = navigate(disk, saved_path);
+	}
+	free(saved_path);
+	return entry;
+}
+
+/*
+ * Given an inode, remove an inode.
+ */
+int remove_inode(unsigned char *disk, struct ext2_dir_entry_2 *entry) {
+
+	int status = 0;
+	int inode_num = entry->inode;
+	struct ext2_inode *inode = get_inode(disk, inode_num);
+	
+	// Get the super block
+	struct ext2_super_block *super = EXT2_SUPER_BLOCK(disk);
+	// Get the block group
+	struct ext2_group_desc *blgrp = EXT2_GROUP_DESC(disk);
+
+	unsigned char *inode_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_inode_bitmap);
+	int block_pos = inode_num / 8;
+	int bit_pos = (inode_num % 8) -1;
+	int byte = inode_bm[block_pos];
+
+	byte = byte & ~(1 << bit_pos);
+	inode_bm[block_pos] = byte;
+	blgrp->bg_free_inodes_count ++;
+	super->s_free_inodes_count ++;
+
+	// Set file type to undef
+	entry->file_type = EXT2_FT_UNKNOWN;
+	// Set size to 0
+	inode->i_size = 0;
+	// set delete time
+	time_t delete_time = time(NULL);
+	if (delete_time != (time_t)(-1)) {
+		inode-> i_dtime = (intmax_t)time;
+	} else {
+		fprintf(stderr, "Error: Failed to set delete time in inode %d\n", inode_num);
+		status = 1;
+	}
+	
+	// set entry's inode to 0
+	entry->inode=0;
+	return status;
+}
+
+/*
+ * Given an entry and an inode, clear the info for the bitmaps and set appropriate fields
+ */
+int delete_entry(unsigned char* disk, struct ext2_inode *inode, struct ext2_dir_entry_2 * entry) {
+
+	int i;
+	unsigned int num_blocks;
+	int *blocks;
+	int block_pos;
+	int bit_pos;
+	int byte;
+	int status = 0;
+	// Get a list of blocks that are being used by this entry
+	blocks = inode_to_blocks(disk, inode);
+	// Get the number of blocks being used by this entry
+	num_blocks = EXT2_NUM_BLOCKS(disk, inode);
+	// Get the super block
+	struct ext2_super_block *super = EXT2_SUPER_BLOCK(disk);
+	// Get the block group
+	struct ext2_group_desc *blgrp = EXT2_GROUP_DESC(disk);
+	// Get the block bitmap
+        unsigned char * block_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_block_bitmap);
+	// Set blocks to free
+	for (i = 0; i < num_blocks; i ++) {
+		// Get the byte where the block is in the bitmap.
+		// For example, with block 25:
+		// 25 / 8 = 3, so in the bitmap, the 3rd index is where the bit mapping to this block is stored
+		block_pos = blocks[i] / 8;
+		// Get the bit that maps this to this block in the bitmap.
+		// For example, with block 25:
+		// 25 % 8 = 1. So we need to change the 1st bit from the left
+		// -1 because bits are 0 indexed
+		bit_pos = (blocks[i] % 8) - 1;
+		// GEt the number representing the bits at this point in the bitmap
+		byte = block_bm[block_pos];
+		// Set bit to off
+		byte = byte & ~(1 << bit_pos);
+		// set new value in bitmap
+		block_bm[block_pos] = byte;
+		// increase free blocks count
+		blgrp->bg_free_blocks_count ++;
+		super->s_free_blocks_count ++;
+	}
+	
+	remove_inode(disk, entry);
+	return status;		
+}
+
+/*
+ * Update the rec_len of the prev file, this removing the given entry from the directory
+ */
+int update_rec_len(unsigned char *disk, struct ext2_dir_entry_2 *entry, char *path) {
+	int status = 0;
+	
+	struct ext2_dir_entry_2 *parent = get_parent(disk, path);
+	struct ext2_inode * parent_inode = get_inode(disk, parent->inode);
+
+	// add to rec_len of previous dir entry so that deleted file gets skipped
+	// do this in a loop to check when dir size ovetakes blocks size 
+	struct ext2_dir_entry_2 *iter_entry = NULL;
+	int limit = EXT2_NUM_BLOCKS(disk, parent_inode);
+	// re-use prev for iteration variable	
+	int *blocks = inode_to_blocks(disk, parent_inode);
+	int block_size = 0;
+	int finished = 0;
+	int i = 0;
+	
+	// Loop through blocks
+	for (i=0; i < limit && (!finished); i ++) {
+		// re use prev variable as iterator
+		// Get first entry in directory
+		iter_entry = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
+		struct ext2_dir_entry_2 *prev = NULL;
+		// Keep track of how close we are to hitting the block size
+		block_size = 0;
+		// Loop through each directory entry
+		while ((!finished) && block_size <= EXT2_BLOCK_SIZE) {
+			// Check when we reach the wanted entry
+			if (strcmp(get_name(entry), get_name(iter_entry))==0) {
+				// update rec_len of prev
+				if (prev != NULL) {
+					prev->rec_len += iter_entry->rec_len;
+				} else if (block_size + iter_entry->rec_len >= EXT2_BLOCK_SIZE) { // If the total size it great than the size of the block, clear the block ikn the parent node
+					parent_inode->i_block[i] = 0;	
+				} else { // Update value of next
+					struct ext2_dir_entry_2 *next = EXT2_NEXT_FILE(iter_entry);
+					next->rec_len -= iter_entry->rec_len;
+				}
+				finished = 1;
+			}
+			if (!finished) {
+				block_size += iter_entry->rec_len;
+				prev = iter_entry;
+				if (iter_entry->rec_len == 0) finished = 1;
+				iter_entry = EXT2_NEXT_FILE(iter_entry);
+			}
+		}
+	}
+	free(blocks);
+	return status;
+}
+
+
+/*
+ * Given the disk and an absolute path to an entry, update entry fields to simulate file deletion.
+ * This says file but to avoid refactoring issues, it allows the deletion of links, files, and directories
+ */
+int remove_file(unsigned char *disk, char *path) {
+
+	int status = 0;
+	char* saved_path = malloc(sizeof(char)* strlen(path));
+        strncpy(saved_path, path, strlen(path));
+	// get actual file that needs to be removed
+	struct ext2_dir_entry_2 *entry = navigate(disk, saved_path);
+	// update rec len to show removal
+	update_rec_len(disk, entry, path);
+	free(saved_path);
+	if (EXT2_IS_LINK(entry)) {
+		// Remove inode
+		status = remove_inode(disk, entry);
+	} else {
+		// Get the inode from the block
+		struct ext2_inode *inode = get_inode(disk, entry->inode);
+
+		if (EXT2_IS_DIRECTORY(entry)) {
+			// update_rec_len removes file from linked list in parent directory, so decrement link count
+			inode->i_links_count --;
+		}
+
+		// decrement if hardlink
+		inode->i_links_count --;
+		if (inode->i_links_count <= 0) { // No other link to this, delete entry (which deletes inode)
+			if (EXT2_IS_FILE(entry) || EXT2_IS_DIRECTORY(entry)) {
+				delete_entry(disk, inode, entry);
+			}
+		}
+	}
+
+	return status;
+}
+
+
+
