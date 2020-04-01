@@ -79,7 +79,9 @@ int main(int argc, char *argv[]) {
 		}
 		free(dir_name);
 		/* At this point, the path exists and the specified directly doesn't exist yet so we will create it */
-		add_thing(disk, entry, dir_name, EXT2_FT_DIR);
+		struct ext2_dir_entry_2 *new_dir_entry = add_thing(disk, entry, dir_name, EXT2_FT_DIR);
+		/* Add the .. Shortcut */
+		struct ext2_dir_entry_2 *parent_dir = add_thing(disk, new_dir_entry, "..", EXT2_FT_SYMLINK)
 		return 0;
 	} else {
 		return 1;
