@@ -7,8 +7,11 @@ $(PROGS) : % : %.c ext2.h ext2_welp.h
 	gcc -Wall -g -o $@ $<
 
 # Restore images from backup
-restore :
-	cp -r .backup/* images/
+restore : images
+	cp -r .backup/* images
+
+images :
+	mkdir images
 
 # Clean up compiled stuff
 clean : 

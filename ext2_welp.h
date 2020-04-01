@@ -66,8 +66,12 @@ int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
     if (!entry->i_block) return NULL;
 
     unsigned int limit = EXT2_NUM_BLOCKS(disk, entry);
-    int *blocks = malloc(limit * sizeof(int));
+    int count = limit + (limit > EXT2_DIRECT_BLOCKS ? (EXT2_BLOCK_SIZE / sizeof(int)) : 0);
+    int *blocks = malloc(count * sizeof(int));
     assert(blocks);
+
+    // Clean blocks
+    memset(blocks, '\0', count * sizeof(int));
 
     // Load direct blocks
     memcpy(blocks, entry->i_block, MIN(EXT2_DIRECT_BLOCKS, limit) * sizeof(int));
@@ -92,7 +96,7 @@ int *inode_to_blocks(unsigned char *disk, struct ext2_inode *entry) {
 int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, unsigned char *map, unsigned short *count, unsigned short *sb_count) {
     unsigned bit = map[index / 8] & (1 << index % 8);
     if (state && !*count) {
-        perror("bitmap");
+        perror("bitmap: out of space");
         exit(1);
     }
 
@@ -255,10 +259,20 @@ int remove_file(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
     return 0;
 }
 
+struct _last_file_params {
+    struct ext2_dir_entry_2 *last;
+    int required;
+};
+int _last_file(struct ext2_dir_entry_2 *block, void *_params) {
+    struct _last_file_params *params = (struct _last_file_params *)_params;
+    char *dir_name = get_name(block);
+    unsigned int actual = EXT2_DIR_SIZE(dir_name);
+    free(dir_name);
 
-
-int _last_file(struct ext2_dir_entry_2 *block, void *last) {
-    *(struct ext2_dir_entry_2 **)last = block;
+    if (block->rec_len - actual >= params->required) {
+        return 0;
+    }
+    params->last = block;
     return 1;
 }
 /*
@@ -266,8 +280,9 @@ int _last_file(struct ext2_dir_entry_2 *block, void *last) {
  */
 struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name, unsigned int type) {
     // Create new file entry struct
-    unsigned int required = EXT2_DIR_SIZE(name);
+    struct _last_file_params *params = (struct _last_file_params *)malloc(sizeof(struct _last_file_params));
     struct ext2_dir_entry_2 *new_entry = (struct ext2_dir_entry_2 *)malloc(EXT2_DIR_SIZE(name));
+    int required = params->required = EXT2_DIR_SIZE(name);
 
     // Set the fields and bitmap
     strncpy(new_entry->name, name, strlen(name));
@@ -277,8 +292,10 @@ struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 
     set_inode_bitmap(disk, new_entry->inode, 1);
 
     // Find last file in directory
-    struct ext2_dir_entry_2 *last_entry = NULL;
-    iterate_inode(disk, get_inode(disk, dir->inode), _last_file, &last_entry);
+    struct ext2_dir_entry_2 *last_entry = iterate_inode(disk, get_inode(disk, dir->inode), _last_file, params);
+    if (!last_entry) {
+        last_entry = params->last;
+    }
     char *dir_name = get_name(last_entry);
     unsigned int actual = EXT2_DIR_SIZE(dir_name);
     free(dir_name);

@@ -22,20 +22,31 @@ char *getName(char *path) {
 int ext2_cp(unsigned char *disk, char *src, char *dest) {
 	// Get file info
 	struct stat sb;
+	char *name;
 	if (stat(src, &sb) || !S_ISREG(sb.st_mode)) {
-		perror(src);
+		printf("Invalid source\n");
 		return ENOENT;
 	}
 
 	// Navigate to the dest
+	name = getName(dest);
 	struct ext2_dir_entry_2 *entry = navigate(disk, dest);
 	if (!entry) {
-		perror(dest);
-		return ENOENT;
+		int end = strlen(dest) - strlen(name);
+		char dir[EXT2_NAME_LEN];
+		strncpy(dir, dest, end);
+		dir[end] = '\0';
+
+		entry = navigate(disk, dir);
+
+		if (!entry) {
+			printf("Invalid destination\n");
+			return ENOENT;
+		}
 	}
 
 	// If file already exist, overwrite it
-	char *name = getName(src);
+	name = getName(src);
 	struct ext2_dir_entry_2 *check = find_file(disk, get_inode(disk, entry->inode), name);
 	if (check) {
 		entry = check;
