@@ -59,7 +59,7 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 	struct ext2_inode *inode = get_inode(disk, entry->inode);
 	if (EXT2_IS_FILE(entry)) {
 		// Clean entry
-		remove_file(disk, entry->inode, 1);
+		clear_blocks(disk, entry->inode, 1);
 	} else {
 		// Get new inode
 		entry = add_thing(disk, entry, name, EXT2_FT_REG_FILE);
@@ -96,6 +96,7 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 			// Init indirect
 			if (i == EXT2_DIRECT_BLOCKS) {
 				int indirect = get_free_block(disk);
+				set_block_bitmap(disk, indirect, 1);
 				inode->i_block[EXT2_DIRECT_BLOCKS] = indirect;
 			}
 
@@ -106,7 +107,7 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 		i++;
 	}
 
-	EXT2_SET_BLOCKS(inode, MIN(i, EXT2_DIRECT_BLOCKS));
+	EXT2_SET_BLOCKS(inode, MIN(i, EXT2_DIRECT_BLOCKS + 1));
 	return 0;
 }
 

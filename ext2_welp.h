@@ -100,7 +100,7 @@ int set_thing_bitmap(unsigned char *disk, unsigned int index, unsigned state, un
     unsigned bit = map[index / 8] & (1 << index % 8);
     if (state && !*count) {
         perror("bitmap: out of space");
-        exit(1);
+        exit(ENOSPC);
     }
 
     if (bit != state) {
@@ -228,7 +228,7 @@ struct ext2_dir_entry_2 *find_file(unsigned char *disk, struct ext2_inode *entry
 /*
  * Removes a file from disk, but not directory
  */
-int remove_file(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
+int clear_blocks(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
     struct ext2_inode *file = get_inode(disk, inode);
     int limit = EXT2_NUM_BLOCKS(disk, file);
     int i;
@@ -393,6 +393,17 @@ struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
         // If subdirectory is a file, return NULL. Else return the last file
         if (!EXT2_IS_DIRECTORY(entry)) {
             return token ? NULL : entry;
+        
+        // If link, then go to the path in the link
+        } else if (!EXT2_IS_LINK(entry)) {
+            inode = get_inode(disk, entry->inode);
+            char *path = (char *)malloc((inode->i_size + 1) * sizeof(char));
+            memset(path, '\0', (inode->i_size + 1) * sizeof(char));
+            strncpy(path, inode->i_block[0], inode->i_size);
+            entry = navigate(disk, path);
+            free(path);
+
+            return entry;
         }
         inode = get_inode(disk, entry->inode);
     }
