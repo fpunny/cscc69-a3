@@ -1,4 +1,5 @@
 PROGS = ext2_cp ext2_ln ext2_ls ext2_mkdir ext2_rm ext2_rm_bonus
+FILES = ext2_cp.c ext2_ln.c ext2_ls.c ext2_mkdir.c ext2_rm.c ext2_rm_bonus.c
 
 # Creates all ext2 commands
 all : $(PROGS)
@@ -20,3 +21,7 @@ clean :
 # Really cleanup repo
 purge :
 	rm -rf $(PROGS) .backup
+
+# For submissions
+compile :
+	tar -czvf a3.tar.gz $(FILES) ext2.h ext2_welp.h INFO.txt Makefile
