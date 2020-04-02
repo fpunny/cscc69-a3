@@ -10,8 +10,8 @@ int remove_file_or_dir(unsigned char *disk, char* path, int r_flag) {
 	int i, j;
 	//save path so it doesnt mess with other iterations
 	int path_len = strlen(path);
-	char* saved_path = malloc(sizeof(char)* (path_len) +1);
-	strncpy(saved_path, path, path_len+1);
+	char* saved_path = malloc(path_len + 1);
+	strncpy(saved_path, path, path_len + 1);
 
 	if (r_flag == 0) {
 		remove_file(disk, saved_path);

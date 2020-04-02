@@ -65,7 +65,6 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 		inode = get_inode(disk, entry->inode);
 
 		// Setup inode
-		memset(inode, '\0', sizeof(struct ext2_inode));
 		inode->i_mode = EXT2_S_IFREG;
 		inode->i_links_count = 1;
 		inode->i_ctime = time(0);
@@ -76,10 +75,10 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 	inode->i_atime = time(0);
 	inode->i_mtime = time(0);
 
-	char *buff = malloc(EXT2_BLOCK_SIZE * sizeof(char));
+	char *buff = (char *)malloc(EXT2_BLOCK_SIZE);
 	int block_index, i = 0;
 
-	while (fread(buff, sizeof(char), EXT2_BLOCK_SIZE, file)) {
+	while (fread(buff, 1, EXT2_BLOCK_SIZE, file)) {
 		block_index = get_free_block(disk);
 		set_block_bitmap(disk, block_index, 1);
 
@@ -107,6 +106,7 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 	}
 
 	EXT2_SET_BLOCKS(inode, MIN(i, EXT2_DIRECT_BLOCKS + 1));
+	free(buff);
 	return 0;
 }
 

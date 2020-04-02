@@ -21,7 +21,7 @@
 #define MAX(x, y) (x < y ? y : x)
 
 // Scalars
-#define EXT2_DIR_SIZE(name) MULTIPLE_OF_FOUR(sizeof(struct ext2_dir_entry_2) + strlen(name)*sizeof(char))
+#define EXT2_DIR_SIZE(name) MULTIPLE_OF_FOUR(sizeof(struct ext2_dir_entry_2) + strlen(name))
 #define EXT2_DIRECT_BLOCKS 12
 
 // https://www.nongnu.org/ext2-doc/ext2.html#i-blocks
@@ -47,7 +47,7 @@ unsigned char *read_image(char *image) {
 }
 
 char *get_name(struct ext2_dir_entry_2 *entry) {
-    char *name = (char *)malloc((entry->name_len + 1) * sizeof(char));
+    char *name = (char *)malloc(entry->name_len + 1);
     strncpy(name, entry->name, entry->name_len);
     name[entry->name_len] = '\0';
     return name;
@@ -372,18 +372,6 @@ struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
         if (!EXT2_IS_DIRECTORY(entry)) {
             free(_path);
             return token ? NULL : entry;
-        
-        // If link, then go to the path in the link
-        } else if (EXT2_IS_LINK(entry)) {
-            inode = get_inode(disk, entry->inode);
-            char *path = (char *)malloc((inode->i_size + 1) * sizeof(char));
-            memset(path, '\0', (inode->i_size + 1) * sizeof(char));
-            strncpy(path, (char *)EXT2_BLOCK(disk, inode->i_block[0]), inode->i_size);
-            entry = navigate(disk, path);
-            free(path);
-
-            free(_path);
-            return entry;
         }
         inode = get_inode(disk, entry->inode);
     }
@@ -406,7 +394,7 @@ int create_soft_link(unsigned char *disk, struct ext2_inode *entry, char *path) 
         len--;
     }
 
-    memcpy(EXT2_BLOCK(disk, entry->i_block[0]), _path, len * sizeof(char));
+    memcpy(EXT2_BLOCK(disk, entry->i_block[0]), _path, len);
     entry->i_size = len;
 
     return 0;
@@ -417,7 +405,7 @@ int create_soft_link(unsigned char *disk, struct ext2_inode *entry, char *path) 
  */
 struct ext2_dir_entry_2 *get_parent(unsigned char *disk, char *path) {
 	// Get parent directory to iterate through blocks and find
-	char* saved_path = malloc(sizeof(char)* strlen(path));
+	char* saved_path = malloc(strlen(path));
         strncpy(saved_path, path, strlen(path));
 	struct ext2_dir_entry_2 *entry = NULL;
 	
@@ -587,7 +575,7 @@ int update_rec_len(unsigned char *disk, struct ext2_dir_entry_2 *entry, char *pa
 int remove_file(unsigned char *disk, char *path) {
 
 	int status = 0;
-	char* saved_path = malloc(sizeof(char)* strlen(path));
+	char* saved_path = malloc(strlen(path));
         strncpy(saved_path, path, strlen(path));
 	// get actual file that needs to be removed
 	struct ext2_dir_entry_2 *entry = navigate(disk, saved_path);

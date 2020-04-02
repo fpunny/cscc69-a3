@@ -10,7 +10,7 @@ char *usage = "USAGE: %s disk path\n";
 int check_file_type(unsigned char *disk, char *path) {
 
 	int status = 0;
-	char* saved_path = malloc(sizeof(char)* strlen(path));
+	char* saved_path = malloc(strlen(path));
         strncpy(saved_path, path, strlen(path));
 		
 	// Get the block from the given path

@@ -60,7 +60,7 @@ Any needed space in the inode table can be found by looking in the inode allocat
 char *usage = "USAGE: %s disk path\n";
 
 char *get_dir(char *path) {
-	char *_path = (char *)malloc((strlen(path) + 1) * sizeof(char));
+	char *_path = (char *)malloc(strlen(path) + 1);
 	strncpy(_path, path, strlen(path) + 1);
 
 	char *token = strtok(_path, "/");
