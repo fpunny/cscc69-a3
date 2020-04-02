@@ -82,12 +82,17 @@ int main(int argc, char *argv[]) {
 			return EEXIST;
 		}
 		free(dir_name);
+		
 		/* Create new Dir with given name */
 		struct ext2_dir_entry_2 *new_dir_entry = add_thing(disk, entry, dir_name, EXT2_FT_DIR);
+		new_dir_inode->i_links_count++;
+		struct ext2_inode *new_dir_inode = get_inode(disk, new_dir_entry->inode);
 		/* Add the . Shortcut */
-		struct ext2_dir_entry_2 *curr_dir_link = add_thing(disk, new_dir_entry, ".", EXT2_FT_SYMLINK)
+		struct ext2_dir_entry_2 *curr_dir_link = add_thing(disk, new_dir_entry, ".", EXT2_FT_DIR)
+		entryNode->i_links_count++;
 		/* Add the .. Shortcut */
-		struct ext2_dir_entry_2 *parent_dir_link = add_thing(disk, new_dir_entry, "..", EXT2_FT_SYMLINK)
+		struct ext2_dir_entry_2 *parent_dir_link = add_thing(disk, new_dir_entry, "..", EXT2_FT_DIR)
+			
 		return 0;
 	} else {
 		return 1;

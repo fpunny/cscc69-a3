@@ -278,6 +278,18 @@ int _last_file(struct ext2_dir_entry_2 *block, void *_params) {
     params->last = block;
     return 1;
 }
+
+/*
+	This function creates a symbolic / soft link.
+	@param {char} The Disk Image
+	@param {ext2_dir_entry_2} Target Directory Link will be created in
+	@param {name} The name of the Link that will be created
+ Type = EXT2_FT_SYMLINK by default
+
+struct ext2_dir_entry_2 *add_link(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name) {
+
+} */
+
 /*
  * Adds a thing to the directory
  */
