@@ -20,7 +20,7 @@ clean :
 
 # Really cleanup repo
 purge :
-	rm -rf $(PROGS) .backup
+	rm -rf $(PROGS) images a3.tar.gz
 
 # For submissions
 compile :
