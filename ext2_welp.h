@@ -1,10 +1,11 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include <string.h>
-#include <fcntl.h>
-#include <time.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <time.h>
 #include "ext2.h"
 
 /* Helpful Notes
@@ -262,61 +263,38 @@ int clear_blocks(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
     return 0;
 }
 
-struct _last_file_params {
-    struct ext2_dir_entry_2 *last;
-    int required;
-};
-int _last_file(struct ext2_dir_entry_2 *block, void *_params) {
-    struct _last_file_params *params = (struct _last_file_params *)_params;
+int _last_file(struct ext2_dir_entry_2 *block, void *required) {
     char *dir_name = get_name(block);
     unsigned int actual = EXT2_DIR_SIZE(dir_name);
     free(dir_name);
 
-    if (block->rec_len - actual >= params->required) {
+    if (block->rec_len - actual >= *(int *)required) {
         return 0;
     }
-    params->last = block;
     return 1;
 }
-
-/*
-	This function creates a symbolic / soft link.
-	@param {char} The Disk Image
-	@param {ext2_dir_entry_2} Target Directory Link will be created in
-	@param {name} The name of the Link that will be created
- Type = EXT2_FT_SYMLINK by default
-
-struct ext2_dir_entry_2 *add_link(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name) {
-
-} */
 
 /*
  * Adds a thing to the directory
  */
 struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 *dir, char *name, unsigned int type) {
     // Create new file entry struct
-    struct _last_file_params *params = (struct _last_file_params *)malloc(sizeof(struct _last_file_params));
     struct ext2_dir_entry_2 *new_entry = (struct ext2_dir_entry_2 *)malloc(EXT2_DIR_SIZE(name));
-    int required = params->required = EXT2_DIR_SIZE(name);
+    int required = EXT2_DIR_SIZE(name);
 
     // Set the fields and bitmap
     strncpy(new_entry->name, name, strlen(name));
     new_entry->inode = get_free_inode(disk);
     new_entry->name_len = strlen(name);
     new_entry->file_type = type;
-    set_inode_bitmap(disk, new_entry->inode, 1);
 
     // Find last file in directory
-    struct ext2_dir_entry_2 *last_entry = iterate_inode(disk, get_inode(disk, dir->inode), _last_file, params);
-    if (!last_entry) {
-        last_entry = params->last;
-    }
-    char *dir_name = get_name(last_entry);
-    unsigned int actual = EXT2_DIR_SIZE(dir_name);
-    free(dir_name);
+    struct ext2_dir_entry_2 *last_entry = iterate_inode(disk, get_inode(disk, dir->inode), _last_file, &required);
+    if (last_entry) {
+        char *dir_name = get_name(last_entry);
+        unsigned int actual = EXT2_DIR_SIZE(dir_name);
+        free(dir_name);
 
-    // We have space, add to block
-    if (required <= EXT2_BLOCK_SIZE - actual) {
         new_entry->rec_len = last_entry->rec_len - actual;
         memcpy((char *)last_entry + actual, new_entry, required);
         last_entry->rec_len = actual;
@@ -324,12 +302,12 @@ struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 
         // Return new file
         free(new_entry);
         return EXT2_NEXT_FILE(last_entry);
-
-    // No space, new block
     } else {
         new_entry->rec_len = EXT2_BLOCK_SIZE;
         struct ext2_inode *dir_inode = get_inode(disk, dir->inode);
         int index = EXT2_NUM_BLOCKS(disk, dir_inode);
+
+        printf("%d\n", EXT2_NUM_BLOCKS(disk, dir_inode));
 
         // Setup new block with entry to put into directory
         int block_index = get_free_block(disk);
@@ -374,9 +352,6 @@ struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 
         free(new_entry);
         return (struct ext2_dir_entry_2 *)block;
     }
-
-    free(new_entry);
-    return NULL;
 }
 
 /*
@@ -386,30 +361,55 @@ struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
     struct ext2_inode *inode = get_inode(disk, EXT2_ROOT_INO); // Root directory
     struct ext2_dir_entry_2 *entry = find_file(disk, inode, ".");
     
-    char *token = strtok(path, "/");
+    char *_path = (char *)malloc(strlen(path) + 1);
+    strncpy(_path, path, strlen(path) + 1);
+    char *token = strtok(_path, "/");
+
     while(token) {
         entry = find_file(disk, inode, token);
         token = strtok(NULL, "/");
         // If subdirectory is a file, return NULL. Else return the last file
         if (!EXT2_IS_DIRECTORY(entry)) {
+            free(_path);
             return token ? NULL : entry;
         
         // If link, then go to the path in the link
-        } else if (!EXT2_IS_LINK(entry)) {
+        } else if (EXT2_IS_LINK(entry)) {
             inode = get_inode(disk, entry->inode);
             char *path = (char *)malloc((inode->i_size + 1) * sizeof(char));
             memset(path, '\0', (inode->i_size + 1) * sizeof(char));
-            strncpy(path, inode->i_block[0], inode->i_size);
+            strncpy(path, (char *)EXT2_BLOCK(disk, inode->i_block[0]), inode->i_size);
             entry = navigate(disk, path);
             free(path);
 
+            free(_path);
             return entry;
         }
         inode = get_inode(disk, entry->inode);
     }
     
     // Return the file/directory
+    free(_path);
     return entry;
+}
+
+int create_soft_link(unsigned char *disk, struct ext2_inode *entry, char *path) {
+    int len = strlen(path);
+    char *_path = path;
+
+    if (path[0] == '/') {
+        _path++;
+        len--;
+    }
+
+    if (path[len - 1] == '/') {
+        len--;
+    }
+
+    memcpy(EXT2_BLOCK(disk, entry->i_block[0]), _path, len * sizeof(char));
+    entry->i_size = len;
+
+    return 0;
 }
 
 /*

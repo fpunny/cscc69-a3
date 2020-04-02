@@ -1,6 +1,4 @@
-#include <stdlib.h>
 #include <stdio.h>
-#include <errno.h>
 #include "ext2_welp.h"
 
 char *usage = "USAGE: %s disk [-a] path\n";

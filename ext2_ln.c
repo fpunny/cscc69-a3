@@ -1,6 +1,6 @@
 
-#include <stdlib.h>
-#include "ext2.h"
+#include <stdio.h>
+#include <time.h>
 #include "ext2_welp.h"
 
 /*
@@ -19,10 +19,10 @@ if either location refers to a directory (EISDIR),
 then your program should return the appropriate error. 
 Note that this version of ln only works with files. 
 
-unsigned int   i_block[15];   /* Pointers to blocks
-unsigned short i_links_count; /* Links count
-#define    EXT2_S_IFLNK  0xA000    /* symbolic link
-#define    EXT2_FT_SYMLINK  7    /* Symbolic Link
+unsigned int   i_block[15];   Pointers to blocks
+unsigned short i_links_count; Links count
+#define    EXT2_S_IFLNK  0xA000    symbolic link
+#define    EXT2_FT_SYMLINK  7    Symbolic Link
 
 Details:
  Links
@@ -70,34 +70,55 @@ int ext2_ln(unsigned char *disk, char *source_path, char *target_path, int is_so
 	// The file we are going to CREATE which is a LINK
 	struct ext2_dir_entry_2 *target_entry = navigate(disk, target_path);
 	
-	/* Check if source file does not exist, if true, return ENOENT */
+	// Check if source file does not exist, if true, return ENOENT
 	if (source_entry == NULL) {
 		printf("No such file\n");
 		return ENOENT;
 	}
-	/* Check if link name already exists, if true, return EEXIST */
+	// Check if link name already exists, if true, return EEXIST
 	char* target_name = get_name(target_entry);
-	struct ext2_dir_entry_2 *check_unique_name = find_file(disk, get_inode(disk, target_entry->inode), target_name)
+	struct ext2_dir_entry_2 *check_unique_name = find_file(disk, get_inode(disk, target_entry->inode), target_name);
 	if (check_unique_name) {
 		return EEXIST;
 	}
 	
-	/* Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR */
+	// Check if location refers to a director using helper EXT2_IS_DIRECTORY, if true, return EISDIR
 	if (EXT2_IS_DIRECTORY(target_entry)) {
 		return EISDIR;
 	}
 	
 	if (is_soft_link) {
 		struct ext2_dir_entry_2 *new_soft_link = add_thing(disk, source_entry, target_name, EXT2_FT_SYMLINK);
-		free(target_name);
-		return ;
+		struct ext2_inode *inode = get_inode(disk, new_soft_link->inode);
+
+		// Get block
+		int block_index = get_free_block(disk);
+		set_block_bitmap(disk, block_index, 1);
+
+		// Setup inode
+		EXT2_SET_BLOCKS(inode, 1);
+		inode->i_block[0] = block_index;
+		inode->i_mode = EXT2_S_IFLNK;
+		inode->i_links_count = 1;
+		inode->i_ctime = time(0);
+		inode->i_atime = time(0);
+		inode->i_mtime = time(0);
+
+		// Write into block
+		create_soft_link(disk, inode, target_name);
+
 	} else {
 		struct ext2_dir_entry_2 *new_hard_link = add_thing(disk, source_entry, target_name, EXT2_FT_REG_FILE);
-		/* Hard Links have the same Inode # as the File being linked to */
+		struct ext2_inode *inode = get_inode(disk, source_entry->inode);
+
+		// Free inode from add
+		set_inode_bitmap(disk, new_hard_link->inode, 0);
 		new_hard_link->inode = source_entry->inode;
-		free(target_name);
-		return ;
+		inode->i_links_count++;
 	}
+
+	free(target_name);
+	return 0;
 }
 
 
