@@ -86,8 +86,12 @@ int main(int argc, char *argv[]) {
 		struct ext2_dir_entry_2 *new_dir_entry = add_thing(disk, entry, dir_name, EXT2_FT_DIR);
 		/* Add the . Shortcut */
 		struct ext2_dir_entry_2 *curr_dir_link = add_thing(disk, new_dir_entry, ".", EXT2_FT_DIR)
+		curr_dir_link->name_len = 1;
+		curr_dir_link->rec_len = 0;
 		/* Add the .. Shortcut */
 		struct ext2_dir_entry_2 *parent_dir_link = add_thing(disk, new_dir_entry, "..", EXT2_FT_DIR)
+		parent_dir_link->name_len = 2;
+		parent_dir_link->rec_len = 0;
 		return 0;
 	} else {
 		return 1;
