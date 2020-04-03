@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
 
 	if (strcmp(path, "/") == 0) {
 		fprintf(stderr, "ext2_rm: Cannot delete root directory\n");
-		return 1;
+		return EPERM;
 	}
 
 	return remove_file_or_dir(disk, path, r_flag);

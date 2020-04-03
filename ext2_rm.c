@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 #include "ext2.h"
 #include "ext2_welp.h"
 
@@ -17,11 +18,11 @@ int check_file_type(unsigned char *disk, char *path) {
 	struct ext2_dir_entry_2 *entry = navigate(disk, saved_path);
 	if (entry == NULL) {
 		fprintf(stderr, "ext2_rm: Invalid file or directory '%s'\n", path);
-		status = 1;
+		return ENOENT;
 	}
 	if (EXT2_IS_DIRECTORY(entry)) {
 		fprintf(stderr, "ext2_rm: cannot remove '%s': Is a directory\n", path);
-		status = 1;
+		return EISDIR;
 	}
 	
 	free(saved_path);
