@@ -8,50 +8,35 @@
 
 char *usage = "USAGE: %s disk path\n";
 
-int check_file_type(unsigned char *disk, char *path) {
-
-	int status = 0;
-	char* saved_path = malloc(strlen(path));
-        strncpy(saved_path, path, strlen(path));
-		
-	// Get the block from the given path
-	struct ext2_dir_entry_2 *entry = navigate(disk, saved_path);
-	if (entry == NULL) {
-		fprintf(stderr, "ext2_rm: Invalid file or directory '%s'\n", path);
-		return ENOENT;
-	}
-	if (EXT2_IS_DIRECTORY(entry)) {
-		fprintf(stderr, "ext2_rm: cannot remove '%s': Is a directory\n", path);
-		return EISDIR;
-	}
-	
-	free(saved_path);
-	return status;
-	
-}
-
 int main(int argc, char *argv[]) {
-	
+	struct ext2_dir_entry_2 *entry, *dir;
 	unsigned char *disk;
 	char *path;
 
 	if (argc == 3)	{
 		disk = read_image(argv[1]);
 		path = argv[2];
-	} 
-	else
-	{
-		printf(usage, argv[0]);
-		exit(1);
+		
+		// Check path
+		entry = navigate(disk, path);
+		if (!entry) {
+			fprintf(stderr, "'%s': Invalid file or directory\n", path);
+			return ENOENT;
+		}
+		if (EXT2_IS_DIRECTORY(entry)) {
+			fprintf(stderr, "'%s': Is a directory\n", path);
+			return EISDIR;
+		}
+
+		// Get directory containing file
+		path = get_dir(path);
+		dir = navigate(disk, path);
+		free(path);
+
+		remove_entry(disk, dir, entry);
+		return 0;
 	}
 
-	if (disk == MAP_FAILED) {
-		perror("mmap");
-		exit(1);
-	}
-	
-	if (check_file_type(disk, path) == 0) {
-		return remove_file(disk, path);
-	}
+	fprintf(stderr, usage, argv[0]);
 	return 1;
 }

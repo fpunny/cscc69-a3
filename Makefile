@@ -1,10 +1,10 @@
 PROGS = ext2_cp ext2_ln ext2_ls ext2_mkdir ext2_rm ext2_rm_bonus
-FILES = ext2_cp.c ext2_ln.c ext2_ls.c ext2_mkdir.c ext2_rm.c ext2_rm_bonus.c
+HEADERS = ext2.h ext2_welp.h
 
 # Creates all ext2 commands
 all : $(PROGS)
 
-$(PROGS) : % : %.c ext2.h ext2_welp.h
+$(PROGS) : % : %.c $(HEADERS)
 	gcc -Wall -g -o $@ $<
 
 # Restore images from backup
@@ -15,7 +15,7 @@ images :
 	mkdir images
 
 # Clean up compiled stuff
-clean : 
+clean :
 	rm -f $(PROGS)
 
 # Really cleanup repo
@@ -24,4 +24,4 @@ purge :
 
 # For submissions
 compile :
-	tar -czvf a3.tar.gz $(FILES) ext2.h ext2_welp.h INFO.txt Makefile
+	tar -czvf a3.tar.gz $(addsuffix .c, $(PROGS)) $(HEADERS) INFO.txt Makefile

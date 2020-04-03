@@ -16,8 +16,8 @@ int ext2_ls(unsigned char *disk, char *path, int flag_a) {
 
 	// Navigate to the directory of path
 	struct ext2_dir_entry_2 *entry = navigate(disk, path);
-	if (entry == NULL) {
-		printf("No such file or directory\n");
+	if (!entry) {
+		fprintf(stderr, "No such file or directory\n");
 		return ENOENT;
 	}
 
@@ -52,14 +52,9 @@ int main(int argc, char *argv[]) {
 	
 	// Anything else
 	} else {
-		printf(usage, argv[0]);
+		fprintf(stderr, usage, argv[0]);
 		return 1;
 	}
-
-	if (disk == MAP_FAILED) {
-        perror("mmap");
-        return 1;
-    }
 
 	return ext2_ls(disk, path, flag_a);
 }

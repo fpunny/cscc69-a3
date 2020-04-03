@@ -7,48 +7,39 @@
 
 char *usage = "USAGE: %s disk src dest\n";
 
-char *getName(char *path) {
-	char *token = strtok(path, "/");
-	char *_token;
-
-	do {
-		_token = strtok(NULL, "/");
-		if (_token) token = _token;
-	} while (_token);
-	return token;
-}
-
 int ext2_cp(unsigned char *disk, char *src, char *dest) {
-	// Get file info
+	// Check source
 	struct stat sb;
-	char *name;
-	if (stat(src, &sb) || !S_ISREG(sb.st_mode)) {
-		printf("Invalid source\n");
+	if (stat(src, &sb)) {
+		fprintf(stderr, "Source file does not exist\n");
 		return ENOENT;
 	}
+	
+	if (S_ISDIR(sb.st_mode)) {
+		fprintf(stderr, "Source is a directory\n");
+		return EISDIR;
+	}
 
-	// Navigate to the dest
-	name = getName(dest);
+	// Check destination, if file or directory exist
 	struct ext2_dir_entry_2 *entry = navigate(disk, dest);
 	if (!entry) {
-		int end = strlen(dest) - strlen(name);
-		char dir[EXT2_NAME_LEN];
-		strncpy(dir, dest, end);
-		dir[end] = '\0';
-
+		char *dir = get_dir(dest);
 		entry = navigate(disk, dir);
 
 		if (!entry) {
-			printf("Invalid destination\n");
+			fprintf(stderr, "%s is not a directory\n", dir);
+			free(dir);
 			return ENOENT;
 		}
+		free(dir);
 	}
 
-	// If file already exist, overwrite it
-	name = getName(src);
-	struct ext2_dir_entry_2 *check = find_file(disk, get_inode(disk, entry->inode), name);
-	if (check) {
-		entry = check;
+	char *name = get_filename(src);
+
+	// Check if file exist, if so overwrite
+	if (EXT2_IS_DIRECTORY(entry)) {
+		struct ext2_dir_entry_2 *_entry = find_file(disk, get_inode(disk, entry->inode), name);
+		if (_entry) entry = _entry;
 	}
 
 	// Open file
@@ -58,7 +49,7 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 	struct ext2_inode *inode = get_inode(disk, entry->inode);
 	if (EXT2_IS_FILE(entry)) {
 		// Clean entry
-		clear_blocks(disk, entry->inode, 1);
+		free_blocks(disk, entry->inode);
 	} else {
 		// Get new inode
 		entry = add_thing(disk, entry, name, EXT2_FT_REG_FILE);
@@ -107,22 +98,18 @@ int ext2_cp(unsigned char *disk, char *src, char *dest) {
 
 	EXT2_SET_BLOCKS(inode, MIN(i, EXT2_DIRECT_BLOCKS + 1));
 	free(buff);
+	free(name);
 	return 0;
 }
 
 int main(int argc, char *argv[]) {
 	// Check args
 	if (argc != 4) {
-		printf(usage, argv[0]);
+		fprintf(stderr, usage, argv[0]);
 		return 1;
 	}
 
 	// Read disk
 	unsigned char *disk = read_image(argv[1]);
-	if (disk == MAP_FAILED) {
-        perror("mmap");
-        return 1;
-    }
-
 	return ext2_cp(disk, argv[2], argv[3]);
 }

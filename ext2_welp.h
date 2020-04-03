@@ -8,9 +8,6 @@
 #include <time.h>
 #include "ext2.h"
 
-/* Helpful Notes
-    entry: ext2_dir_entry_2
-*/
 
 #define EXT2_GROUP_DESC(disk) ((struct ext2_group_desc *)(disk + (EXT2_BLOCK_SIZE * 2)))
 #define EXT2_SUPER_BLOCK(disk) ((struct ext2_super_block *)(disk + EXT2_BLOCK_SIZE))
@@ -37,12 +34,18 @@
 #define EXT2_IS_FILE(entry) ((entry != NULL) && (entry->file_type == EXT2_FT_REG_FILE))
 #define EXT2_IS_LINK(entry) ((entry != NULL) && (entry->file_type == EXT2_FT_SYMLINK))
 
+void remove_dir(unsigned char *, struct ext2_dir_entry_2 *);
+
 /*
  * Read image from image file
  */
 unsigned char *read_image(char *image) {
     int fd = open(image, O_RDWR);
     unsigned char *disk = mmap(NULL, 128 * EXT2_BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (disk == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
     return disk;
 }
 
@@ -51,6 +54,43 @@ char *get_name(struct ext2_dir_entry_2 *entry) {
     strncpy(name, entry->name, entry->name_len);
     name[entry->name_len] = '\0';
     return name;
+}
+
+char *get_dir(char *path) {
+	char *_path = (char *)malloc(strlen(path) + 1);
+	strncpy(_path, path, strlen(path) + 1);
+
+	char *token = strtok(_path, "/");
+	char *_token = NULL;
+	int i = 1;
+
+	do {
+		_token = strtok(NULL, "/");
+		if (_token) {
+			i += strlen(token) + 1;
+			token = _token;
+		}
+	} while (_token);
+
+	strncpy(_path, path, i);
+	_path[i - 1] = '\0';
+
+	return _path;
+}
+
+char *get_filename(char *path) {
+    char *_path = (char *)malloc(strlen(path) + 1);
+    strncpy(_path, path, strlen(path) + 1);
+	char *token = strtok(_path, "/");
+	char *_token;
+
+	do {
+		_token = strtok(NULL, "/");
+		if (_token) token = _token;
+	} while (_token);
+
+    strncpy(_path, token, strlen(token) + 1);
+	return _path;
 }
 
 /*
@@ -201,11 +241,12 @@ struct ext2_dir_entry_2 *iterate_inode(
         block = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
 
         // Loop through entries in block
-        for (j = 0; j < EXT2_BLOCK_SIZE; (j += block->rec_len, block = EXT2_NEXT_FILE(block))) {
+        for (j = 0; j < EXT2_BLOCK_SIZE; block = EXT2_NEXT_FILE(block)) {
             if ((*callback)(block, params) == 0) {
                 free(blocks);
                 return block;
             }
+            j += block->rec_len;
         }
     }
 
@@ -227,9 +268,9 @@ struct ext2_dir_entry_2 *find_file(unsigned char *disk, struct ext2_inode *entry
 }
 
 /*
- * Removes a file from disk, but not directory
+ * Removes blocks from inode, and inode too if specified
  */
-int clear_blocks(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
+void free_blocks(unsigned char *disk, unsigned int inode) {
     struct ext2_inode *file = get_inode(disk, inode);
     int limit = EXT2_NUM_BLOCKS(disk, file);
     int i;
@@ -254,13 +295,6 @@ int clear_blocks(unsigned char *disk, unsigned int inode, unsigned keep_inode) {
     }
 
     EXT2_SET_BLOCKS(file, 0);
-
-    // Free inode
-    if (keep_inode) {
-        set_inode_bitmap(disk, inode, 0);
-    }
-
-    return 0;
 }
 
 int _last_file(struct ext2_dir_entry_2 *block, void *required) {
@@ -307,8 +341,6 @@ struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 
         struct ext2_inode *dir_inode = get_inode(disk, dir->inode);
         int index = EXT2_NUM_BLOCKS(disk, dir_inode);
 
-        printf("%d\n", EXT2_NUM_BLOCKS(disk, dir_inode));
-
         // Setup new block with entry to put into directory
         int block_index = get_free_block(disk);
         unsigned char *block = EXT2_BLOCK(disk, block_index);
@@ -341,8 +373,8 @@ struct ext2_dir_entry_2 *add_thing(unsigned char *disk, struct ext2_dir_entry_2 
                 i++;
             }
             if (i >= EXT2_BLOCK_SIZE) {
-                printf("No space in directory\n");
-                exit(1);
+                fprintf(stderr, "No space in directory\n");
+                exit(ENOSPC);
             }
 
             // Add new block to indirect
@@ -381,208 +413,110 @@ struct ext2_dir_entry_2 *navigate(unsigned char *disk, char *path) {
     return entry;
 }
 
-int create_soft_link(unsigned char *disk, struct ext2_inode *entry, char *path) {
-    int len = strlen(path);
-    char *_path = path;
+/*
+ * Removes the content and inode of a file
+ */
+void remove_file(unsigned char *disk, struct ext2_dir_entry_2 *file) {
+    // Free inode
+    struct ext2_inode *inode = get_inode(disk, file->inode);
+    set_inode_bitmap(disk, file->inode, 0);
+    inode->i_dtime = time(0);
+    inode->i_size = 0;
 
-    if (path[0] == '/') {
-        _path++;
-        len--;
+    // Free blocks
+    free_blocks(disk, file->inode);
+}
+
+int _remove_dir(struct ext2_dir_entry_2 *block, void *_disk) {
+    unsigned char *disk = (unsigned char *)_disk;
+    char *name = get_name(block);
+
+    printf("%s\n", name);
+
+    // If are . and .., then ignore them
+    if (!strcmp(name, ".") || !strcmp(name, "..")) {
+        free(name);
+        return 1;
+    } else if (EXT2_IS_DIRECTORY(block)) {
+        remove_dir(disk, block);
+    } else {
+        remove_file(disk, block);
     }
 
-    if (path[len - 1] == '/') {
-        len--;
+    free(name);
+    return 1;
+}
+/*
+ * Removes the files/directories of a directory and it's inode
+ */
+void remove_dir(unsigned char *disk, struct ext2_dir_entry_2 *dir) {
+    // Free inode
+    struct ext2_inode *inode = get_inode(disk, dir->inode);
+    set_inode_bitmap(disk, dir->inode, 0);
+    inode->i_dtime = time(0);
+    inode->i_size = 0;
+
+    // Remove contents before the actual blocks
+    iterate_inode(disk, inode, _remove_dir, disk);
+    free_blocks(disk, dir->inode);
+}
+
+/*
+ * Removes an entry from a directory
+ */
+void remove_entry(unsigned char *disk, struct ext2_dir_entry_2 *dir, struct ext2_dir_entry_2 *entry) {
+    // Step 1: Deal with entry
+    struct ext2_inode *inode = get_inode(disk, dir->inode);
+    if (EXT2_IS_DIRECTORY(entry)) {
+        inode->i_links_count--; // Remove .. link from directory;
+        remove_dir(disk, entry);
+    } else {
+        remove_file(disk, entry);
     }
 
-    memcpy(EXT2_BLOCK(disk, entry->i_block[0]), _path, len);
-    entry->i_size = len;
+    // Step 2: Deal with dir containing this entry
+    int *blocks = inode_to_blocks(disk, inode);
+    int limit = EXT2_NUM_BLOCKS(disk, inode);
+    struct ext2_dir_entry_2 *last_block, *block;
+    int i, j;
 
-    return 0;
+    char *entry_name = get_name(entry);
+    entry->file_type = EXT2_FT_UNKNOWN;
+    for (i = 0; i < limit; i++) {
+        block = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
+        last_block = NULL;
+
+        // Loop through entries in block
+        for (j = 0; j < EXT2_BLOCK_SIZE; block = EXT2_NEXT_FILE(block)) {
+            char *name = get_name(block);
+            if (!strcmp(name, entry_name)) {
+                // If only block, then remove block and shift
+                if (entry->rec_len == EXT2_BLOCK_SIZE) {
+                    EXT2_SET_BLOCKS(inode, limit - 1);
+                    set_block_bitmap(disk, blocks[i], 0);
+                    blocks[i] = blocks[i + 1];
+
+                // If has last block, extend that
+                } else if (last_block) {
+                    last_block->rec_len += entry->rec_len;
+
+                // If first in block
+                } else {
+                    // Update len
+                    last_block = EXT2_NEXT_FILE(entry);
+                    last_block->rec_len += entry->rec_len;
+
+                    // Shift to first
+                    char *name = get_name(last_block);
+                    memcpy(entry, last_block, EXT2_DIR_SIZE(name));
+                    free(name);
+                }
+            }
+            j += block->rec_len;
+            last_block = block;
+            free(name);
+        }
+    }
+    free(entry_name);
+    free(blocks);
 }
-
-/*
- *
- */
-struct ext2_dir_entry_2 *get_parent(unsigned char *disk, char *path) {
-	// Get parent directory to iterate through blocks and find
-	char* saved_path = malloc(strlen(path));
-        strncpy(saved_path, path, strlen(path));
-	struct ext2_dir_entry_2 *entry = NULL;
-	
-	// Find last / in saved_path
-	char *file_name = strrchr(saved_path,'/');
-	if (file_name == NULL) {// in root directory
-		entry = navigate(disk, "/"); // get root entry
-	} else {
-		// Set the character at this point to '\0', thus terminating the string
-		*file_name = '\0';
-		// saved_path variable is now set to the parent directory, so get parent block
-		entry = navigate(disk, saved_path);
-	}
-	free(saved_path);
-	return entry;
-}
-
-/*
- * Given an inode, remove an inode.
- */
-int remove_inode(unsigned char *disk, struct ext2_dir_entry_2 *entry) {
-
-	int status = 0;
-	int inode_num = entry->inode;
-	struct ext2_inode *inode = get_inode(disk, inode_num);
-	
-	// Get the super block
-	struct ext2_super_block *super = EXT2_SUPER_BLOCK(disk);
-	// Get the block group
-	struct ext2_group_desc *blgrp = EXT2_GROUP_DESC(disk);
-
-	unsigned char *inode_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_inode_bitmap);
-	SET_BIT_0(inode_bm, (inode_num - 1));
-	blgrp->bg_free_inodes_count ++;
-	super->s_free_inodes_count ++;
-
-	// Set file type to undef
-	entry->file_type = EXT2_FT_UNKNOWN;
-	// Set size to 0
-	inode->i_size = 0;
-	// set delete time
-	time_t delete_time = time(NULL);
-	if (delete_time != (time_t)(-1)) {
-		inode-> i_dtime = (intmax_t)time;
-	} else {
-		fprintf(stderr, "Error: Failed to set delete time in inode %d\n", inode_num);
-		status = 1;
-	}
-	
-	// set entry's inode to 0
-	entry->inode=0;
-	return status;
-}
-
-/*
- * Given an entry and an inode, clear the info for the bitmaps and set appropriate fields
- */
-int delete_entry(unsigned char* disk, struct ext2_inode *inode, struct ext2_dir_entry_2 * entry) {
-
-	int i;
-	unsigned int num_blocks;
-	int *blocks;
-	// Get a list of blocks that are being used by this entry
-	blocks = inode_to_blocks(disk, inode);
-	// Get the number of blocks being used by this entry
-	num_blocks = EXT2_NUM_BLOCKS(disk, inode);
-	// Get the super block
-	struct ext2_super_block *super = EXT2_SUPER_BLOCK(disk);
-	// Get the block group
-	struct ext2_group_desc *blgrp = EXT2_GROUP_DESC(disk);
-	// Get the block bitmap
-        unsigned char * block_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_block_bitmap);
-	// Set blocks to free
-	for (i = 0; i < num_blocks; i ++) {
-		if (blocks[i] > 22 && blocks[i] < 128) {
-			SET_BIT_0(block_bm, (blocks[i] - 1));
-			blgrp->bg_free_blocks_count ++;
-			super->s_free_blocks_count ++;
-		}
-	}
-	
-	remove_inode(disk, entry);
-	return 0;		
-}
-
-/*
- * Update the rec_len of the prev file, this removing the given entry from the directory
- */
-int update_rec_len(unsigned char *disk, struct ext2_dir_entry_2 *entry, char *path) {
-	int status = 0;
-	
-	struct ext2_dir_entry_2 *parent = get_parent(disk, path);
-	struct ext2_inode * parent_inode = get_inode(disk, parent->inode);
-
-	// add to rec_len of previous dir entry so that deleted file gets skipped
-	// do this in a loop to check when dir size ovetakes blocks size 
-	struct ext2_dir_entry_2 *iter_entry = NULL;
-	int limit = EXT2_NUM_BLOCKS(disk, parent_inode);
-	// re-use prev for iteration variable	
-	int *blocks = inode_to_blocks(disk, parent_inode);
-	int block_size = 0;
-	int finished = 0;
-	int i = 0;
-	
-	// Loop through blocks
-	for (i=0; i < limit && (!finished); i ++) {
-		// re use prev variable as iterator
-		// Get first entry in directory
-		iter_entry = (struct ext2_dir_entry_2 *)EXT2_BLOCK(disk, blocks[i]);
-		struct ext2_dir_entry_2 *prev = NULL;
-		// Keep track of how close we are to hitting the block size
-		block_size = 0;
-		// Loop through each directory entry
-		while ((!finished) && block_size <= EXT2_BLOCK_SIZE) {
-			// Check when we reach the wanted entry
-			if (strcmp(get_name(entry), get_name(iter_entry))==0) {
-				// update rec_len of prev
-				if (prev != NULL) {
-					prev->rec_len += iter_entry->rec_len;
-				} else if (block_size + iter_entry->rec_len >= EXT2_BLOCK_SIZE) { // If the total size it great than the size of the block, clear the block ikn the parent node
-					parent_inode->i_block[i] = 0;	
-				} else { // Update value of next
-					struct ext2_dir_entry_2 *next = EXT2_NEXT_FILE(iter_entry);
-					next->rec_len -= iter_entry->rec_len;
-				}
-				finished = 1;
-			}
-			if (!finished) {
-				block_size += iter_entry->rec_len;
-				prev = iter_entry;
-				if (iter_entry->rec_len == 0) finished = 1;
-				iter_entry = EXT2_NEXT_FILE(iter_entry);
-			}
-		}
-	}
-	free(blocks);
-	return status;
-}
-
-
-/*
- * Given the disk and an absolute path to an entry, update entry fields to simulate file deletion.
- * This says file but to avoid refactoring issues, it allows the deletion of links, files, and directories
- */
-int remove_file(unsigned char *disk, char *path) {
-
-	int status = 0;
-	char* saved_path = malloc(strlen(path));
-        strncpy(saved_path, path, strlen(path));
-	// get actual file that needs to be removed
-	struct ext2_dir_entry_2 *entry = navigate(disk, saved_path);
-	// update rec len to show removal
-	update_rec_len(disk, entry, path);
-	free(saved_path);
-	if (EXT2_IS_LINK(entry)) {
-		// Remove inode
-		status = remove_inode(disk, entry);
-	} else {
-		// Get the inode from the block
-		struct ext2_inode *inode = get_inode(disk, entry->inode);
-
-		if (EXT2_IS_DIRECTORY(entry)) {
-			// update_rec_len removes file from linked list in parent directory, so decrement link count
-			inode->i_links_count --;
-		}
-
-		// decrement if hardlink
-		inode->i_links_count --;
-		if (inode->i_links_count <= 0) { // No other link to this, delete entry (which deletes inode)
-			if (EXT2_IS_FILE(entry) || EXT2_IS_DIRECTORY(entry)) {
-				delete_entry(disk, inode, entry);
-			}
-		}
-	}
-
-	return status;
-}
-
-
-
