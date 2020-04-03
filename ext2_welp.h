@@ -438,12 +438,7 @@ int remove_inode(unsigned char *disk, struct ext2_dir_entry_2 *entry) {
 	struct ext2_group_desc *blgrp = EXT2_GROUP_DESC(disk);
 
 	unsigned char *inode_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_inode_bitmap);
-	int block_pos = inode_num / 8;
-	int bit_pos = (inode_num % 8) -1;
-	int byte = inode_bm[block_pos];
-
-	byte = byte & ~(1 << bit_pos);
-	inode_bm[block_pos] = byte;
+	SET_BIT_0(inode_bm, (inode_num - 1));
 	blgrp->bg_free_inodes_count ++;
 	super->s_free_inodes_count ++;
 
@@ -473,10 +468,6 @@ int delete_entry(unsigned char* disk, struct ext2_inode *inode, struct ext2_dir_
 	int i;
 	unsigned int num_blocks;
 	int *blocks;
-	int block_pos;
-	int bit_pos;
-	int byte;
-	int status = 0;
 	// Get a list of blocks that are being used by this entry
 	blocks = inode_to_blocks(disk, inode);
 	// Get the number of blocks being used by this entry
@@ -489,28 +480,15 @@ int delete_entry(unsigned char* disk, struct ext2_inode *inode, struct ext2_dir_
         unsigned char * block_bm = ( unsigned char * )(disk + EXT2_BLOCK_SIZE  * blgrp->bg_block_bitmap);
 	// Set blocks to free
 	for (i = 0; i < num_blocks; i ++) {
-		// Get the byte where the block is in the bitmap.
-		// For example, with block 25:
-		// 25 / 8 = 3, so in the bitmap, the 3rd index is where the bit mapping to this block is stored
-		block_pos = blocks[i] / 8;
-		// Get the bit that maps this to this block in the bitmap.
-		// For example, with block 25:
-		// 25 % 8 = 1. So we need to change the 1st bit from the left
-		// -1 because bits are 0 indexed
-		bit_pos = (blocks[i] % 8) - 1;
-		// GEt the number representing the bits at this point in the bitmap
-		byte = block_bm[block_pos];
-		// Set bit to off
-		byte = byte & ~(1 << bit_pos);
-		// set new value in bitmap
-		block_bm[block_pos] = byte;
-		// increase free blocks count
-		blgrp->bg_free_blocks_count ++;
-		super->s_free_blocks_count ++;
+		if (blocks[i] > 22 && blocks[i] < 128) {
+			SET_BIT_0(block_bm, (blocks[i] - 1));
+			blgrp->bg_free_blocks_count ++;
+			super->s_free_blocks_count ++;
+		}
 	}
 	
 	remove_inode(disk, entry);
-	return status;		
+	return 0;		
 }
 
 /*
