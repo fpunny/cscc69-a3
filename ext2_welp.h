@@ -431,8 +431,6 @@ int _remove_dir(struct ext2_dir_entry_2 *block, void *_disk) {
     unsigned char *disk = (unsigned char *)_disk;
     char *name = get_name(block);
 
-    printf("%s\n", name);
-
     // If are . and .., then ignore them
     if (!strcmp(name, ".") || !strcmp(name, "..")) {
         free(name);
